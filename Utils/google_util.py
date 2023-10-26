@@ -3,7 +3,7 @@ import json
 
 # Google API Key
 googleapi = 'https://maps.googleapis.com/maps/api/'
-key = 'AIzaSyDyd3zu8GJTNQ18XizFNYKi9b0Ut7V472c'
+
 
 
 def run_google_api(api_name, params):
