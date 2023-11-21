@@ -1,5 +1,8 @@
 # Utilities
 
+import requests
+from urllib3.util import Retry
+from requests.adapters import HTTPAdapter
 
 def get_cols():
     return ['item', 'taxmap', 'account', 'owner', 'address', 'subdiv', 'tax_dist', 'bldgs', 'acres', 'land_use',
@@ -15,7 +18,7 @@ def get_type():
         'owner': str,
         'address': str,
         'subdiv': str,
-        'tax_dist': float,
+        'tax_dist': str,
         'bldgs': float,
         'acres': float,
         'land_use': str,
@@ -87,4 +90,28 @@ def print_text(obj1, inp):
     obj1.insert(tk.END, str(inp) + '\n')
     obj1['state'] = 'disabled'
     obj1.see(tk.END)
-    obj1.update_idletasks()
+    # obj1.update_idletasks()
+    obj1.update()
+
+
+def polygon_area(points):
+    area = 0  # Accumulates area
+    j = len(points) - 1
+
+    for i in range(len(points)):
+        area += (points['x'].iloc[j] + points['x'].iloc[i]) * (points['y'].iloc[j] - points['y'].iloc[i])
+        j = i  # j is the previous vertex to i
+
+    return area / 2 /
+
+def run_query(url, params):
+
+    retries = Retry(
+        total=3,
+        backoff_factor=0.1,
+        status_forcelist=[408, 429, 500, 502, 503, 504],
+    )
+    session = requests.Session()
+    session.mount('https://', HTTPAdapter(max_retries=retries))
+    return session.get(url, params=params, verify=False)
+

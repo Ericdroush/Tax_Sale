@@ -8,9 +8,6 @@ Steps:
 @author: ericd
 """
 
-import requests
-from urllib3.util import Retry
-from requests.adapters import HTTPAdapter
 from bs4 import BeautifulSoup
 import pandas as pd
 from pathlib import Path
@@ -19,33 +16,44 @@ import time
 from datetime import date
 import numpy as np
 
-
-
 # adding utils to the system path
 sys.path.insert(0, 'C:/Users/ericd/OneDrive/Documents/Python Scripts/Tax_Sale/Utils')
 from tax_util import *
 from google_util import *
 
-#For future efforts - link to map
-# https://propertyviewer.andersoncountysc.org/mapsjs/?TMS=1491606003&disclaimer=false
-# https://anderson.postingpro.net/detail.aspx?needle=2461815 - but I don't know how to get this property number
-# https://acpass.andersoncountysc.org/asrdetails.cgs?mapno=0149160600300000
-# https://anderson.postingpro.net/SaleList.aspx
 
 def obtain_props(pwin):
 
+    # Prep work
+    # Go to this website https://www.spartanburgcounty.org/640/2023-Tax-Sale-Info
+    # Click on Real Estate
+    # On the new webpage press Ctrl+A to select all and Ctrl+C to copy
+    # Paste in a text file called props_from_web.csv in this directory
+    #   C:\Users\ericd\OneDrive\Documents\Python Scripts\Tax_Sale\Counties\Spartangburg
+
     print_text(pwin, 'Retrieving tax sale properties ...')
-    cols = ['item', 'owner', 'tax_dist', 'prop_desc', 'taxmap', 'owner2', 'deedbook', 'page', 'yearsdue',
-               'amount_due', 'pct', 'blank1', 'blank2']  # Translate into standard names
-    with open('Counties/Anderson/NewspaperAd.csv') as f:
-        test_prop = f.readlines()
 
-    for line in range(len(test_prop)):
-        if test_prop[line][0].isdigit():
-            skip_count = line
-            break
+    filename = 'Counties/Spartanburg/props_from_web.csv'
+    with open(filename) as f:
+        props = f.readlines()
 
-    props = pd.read_csv('Counties/Anderson/NewspaperAd.csv', sep=',', dtype=str, skiprows=skip_count, names = cols)
+    props[0] = 'item,taxmap,description\n'  # Set the header
+
+    for i in range(1, len(props)):
+        props[i] = props[i].replace(',', '')
+        if props[i][0:4].isnumeric():
+            props[i] = props[i].replace(' ', ',', 2)  # Adds a comma after the first space
+        else:
+            # Removes the carriage return from the previous line, lines will get combined at export
+            props[i - 1] = props[i - 1].rstrip()
+
+    filename = 'Counties/Spartanburg/props_clean_from_web.csv'
+    out = open(filename, 'w')
+    for line in props:
+        out.write(line)
+    out.close()
+
+    props = pd.read_csv(filename, sep=',', dtype=str)
 
     print_text(pwin, str(len(props)) + ' tax sale properties has been retrieved...')
 
@@ -56,7 +64,7 @@ def get_gis_info(pwin, filename):
     import json
 
     # Pull list of properties from website
-    props = obtain_props(pwin)  # Can limit # of properties here for testing, just append .head(5)
+    props = obtain_props(pwin).head(5)  # Can limit # of properties here for testing, just append .head(5)
     total_count = len(props)
 
     cols = get_cols()
@@ -80,44 +88,41 @@ def get_gis_info(pwin, filename):
                 #print(tm)
 
                 # Query property details
-                #tm = '1491606003'
+                #tm = '7-11-07-067.00'
                 params = {
                     'f': 'json',
-                    'where': "TMS = '" + tm + "'",
+                    'where': "MAPNUMBER = '" + tm + "'",
                     'outFields': '*'
                 }
-                # url = 'https://propertyviewer.andersoncountysc.org/arcgis/rest/services/NewPropertyViewer/MapServer/5/query?f=json&where=(TMS%20%3D%20%27'
-                # url = url + tm + '%27)&returnGeometry=true&spatialRel=esriSpatialRelIntersects&outFields=*&outSR=102733&dojo.preventCache=1696785811434'
 
-                url = 'https://propertyviewer.andersoncountysc.org/arcgis/rest/services/NewPropertyViewer/MapServer/5/query?'
-
+                url = 'https://maps.spartanburgcounty.org/server/rest/services/OneMap/Tax_Parcels/MapServer/1/query?'
                 response = run_query(url, params)
-                output = json.loads(response.text)
 
-                # "OBJECTID": "OBJECTID",
-                # "TMS": "TMS",
-                # "OWNER": "OWNER",
-                # "OWNER_ADDR": "OWNER_ADDR",
-                # "CITY": "CITY",
-                # "ZIPCODE": "ZIPCODE",
-                # "TAX_DIST": "TAX_DIST",
-                # "DBOOK": "DBOOK",
-                # "DPAGE": "DPAGE",
-                # "PARENT": "PARENT",
-                # "DIMENSIONS": "DIMENSIONS",
-                # "DESCRIPTIO": "DESCRIPTIO",
-                # "PHYS_ADDR": "PHYS_ADDR",
-                # "SALE_YEAR": "SALE_YEAR",
-                # "SALE_PRICE": "SALE_PRICE",
-                # "PREV_OWNER": "PREV_OWNER",
-                # "MRKT_VALUE": "MRKT_VALUE",
-                # "JOINFLD": "JOINFLD",
-                # "TAXOWNSTR": "TAXOWNSTR",
-                # "CPLAT": "CPLAT",
-                # "RATIO": "RATIO",
-                # "IMPRV": "IMPRV",
-                # "SHAPE.STArea()": "SHAPE.STArea()",
-                # "SHAPE.STLength()": "Shape.STLength()"
+                output = json.loads(response.text)
+                # Acreage
+                # City
+                # DEEDACREAGE
+                # DeedBook
+                # DeedPage
+                # District
+                # InstrumentNumber
+                # LegalDescription
+                # LotNumber
+                # MAPNUMBER
+                # MiscTxt
+                # OBJECTID
+                # OwnerName
+                # PARCELNUMBER
+                # PreviousOwnerName
+                # SUBDIVISION
+                # SaleAmount
+                # SaleDate
+                # State
+                # StreetAddress
+                # TAXPIN
+                # TaxpayerName
+                # YearBuilt
+                # Zip
                 # print(output['features'][0]['attributes']['PIN'])
                 # print(output['features'][0]['attributes'].items())
                 # print(output['features'][0]['geometry']['rings'][0])
@@ -147,25 +152,26 @@ def get_gis_info(pwin, filename):
                     # Direct read parameters
                     item = props['item'].iloc[prop]
                     account = 'NaN'
-                    owner = props['owner'].iloc[prop]
-                    subdiv = 'NaN'
-                    tax_dist = props['tax_dist'].iloc[prop]
-                    acres = attr['SHAPE.STArea()'] / 43560
+                    owner = attr['OwnerName']
+                    subdiv = attr['SUBDIVISION']
+                    tax_dist = attr['District']
                     landuse = 'NaN'
                     bldg_type = 'NaN'
                     bedrooms = 'NaN'
                     sq_ft = 'NaN'
-                    appraised_total = attr['MRKT_VALUE']
+                    appraised_total = 'NaN'
                     #sale_price = attr['SALE_PRICE']
-                    #sale_date = attr['SALE_YEAR']
-                    bldgs = attr['IMPRV']
-                    yr_built = 'NaN'
+                    sale_date = from_excel_serial(attr['SaleDate'] / 86400 / 1000 + 25569)
+                    bldgs = 'NaN'
+                    yr_built = attr['YearBuilt']
 
                     # Calculated parameters
                     #dpsf =  dpsf_calc(appraised_total, sq_ft)
                     dpsf = 'NaN'  #Hard code to NaN since sq_ft not available for this county
 
                     corners = pd.DataFrame(data=output['features'][0]['geometry']['rings'][0], columns=['x', 'y'])
+                    acres = polygon_area(corners)
+
                     wkid = output['spatialReference']['latestWkid']
                     lat, lon = geo_convert(corners['x'].mean(), corners['y'].mean(), wkid)
 
@@ -175,13 +181,20 @@ def get_gis_info(pwin, filename):
                     withdrawn = 'A'
 
                     #Call second website for additional details
-                    tm2 = tm.rjust(11, '0') + '00000'
+                    params = {
+                        'AppID': '857',
+                        'LayerID': '16069',
+                        'PageTypeID': '4',
+                        'PageID': '7149',
+                        'Q': '692867197',
+                        'KeyValue': tm
 
-                    params = {'mapno': tm2}
-                    url = 'https://acpass.andersoncountysc.org/asrdetails.cgs?'
-                    response = run_query(url, params)
+                    }
+                    url = 'https://qpublic.schneidercorp.com/Application.aspx?'
+                    response = run_query(url, param)
 
                     soup = BeautifulSoup(response.content, 'html.parser')
+
 
                     sp1 = 0
                     sp2 = 0
@@ -237,6 +250,7 @@ def get_gis_info(pwin, filename):
 
                     county_link = '=HYPERLINK("https://propertyviewer.andersoncountysc.org/mapsjs/?TMS=' + tm + '&disclaimer=false","County")'
                     map_link = '=HYPERLINK("http://maps.google.com/maps?t=k&q=loc:' + str(lat) + '+' + str(lon) + '","Map")'
+                    #map_link = 'http://maps.google.com/maps?t=k&q=loc:' + str(lat) + '+' + str(lon)
 
                     #            'item',             'taxmap', 'account', 'owner',                    'address', 'subdiv', 'tax_dist',
                     #            'bldgs', 'acres', 'land_use','bldg_type', 'bedrooms', 'sq_ft', 'dpsf', 'yr_built','appraised_land', 'appraised_bldg', 'appraised_total',
@@ -245,7 +259,7 @@ def get_gis_info(pwin, filename):
                     data_list = [item, tm, account, owner, address, subdiv, tax_dist,
                              bldgs, acres, landuse, bldg_type, bedrooms, sq_ft, dpsf, yr_built, appraised_land, appraised_bldg, appraised_total,
                              bldg_ratio, sale_price, sale_date, 'NaN', bbox, lat, lon, 'NaN', 'NaN', 'NaN', withdrawn, county_link, map_link,
-                             props['amount_due'].iloc[prop].strip('$').strip(), '', '', '']
+                             float(props['amount_due'].iloc[prop].strip('$').replace(',','')), '', '', '']
 
                     props_new.loc[0] = data_list
                     props_new.to_csv(filename, mode='a', index=False, header=False)
