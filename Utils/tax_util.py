@@ -102,7 +102,7 @@ def polygon_area(points):
         area += (points['x'].iloc[j] + points['x'].iloc[i]) * (points['y'].iloc[j] - points['y'].iloc[i])
         j = i  # j is the previous vertex to i
 
-    return area / 2 /
+    return area / 2 / 43560
 
 def run_query(url, params):
 

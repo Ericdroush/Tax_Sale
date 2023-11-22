@@ -22,7 +22,7 @@ import numpy as np
 
 
 # adding utils to the system path
-sys.path.insert(0, 'C:/Users/ericd/OneDrive/Documents/Python Scripts/Tax_Sale/Utils')
+sys.path.insert(0, '/Utils')
 from tax_util import *
 from google_util import *
 

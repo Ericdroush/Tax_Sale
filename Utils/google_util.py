@@ -1,6 +1,6 @@
 import requests
 import json
-import key
+import Utils.key
 
 # Google API Key
 googleapi = 'https://maps.googleapis.com/maps/api/'
@@ -8,7 +8,7 @@ googleapi = 'https://maps.googleapis.com/maps/api/'
 
 def run_google_api(api_name, params):
 
-    params['key'] = key
+    params['key'] = Utils.key
     response = requests.get(googleapi + api_name + '/json?', params)
 
     # print(response.text)

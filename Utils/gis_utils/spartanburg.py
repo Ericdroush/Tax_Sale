@@ -60,11 +60,14 @@ def obtain_props(pwin):
     return props
 
 
-def get_gis_info(pwin, filename):
+def get_gis_info(pwin, filename, test_flag):
     import json
 
     # Pull list of properties from website
-    props = obtain_props(pwin).head(5)  # Can limit # of properties here for testing, just append .head(5)
+    if test_flag:
+        props = obtain_props(pwin).head(5)  # Limit to 5 properties for testing
+    else:
+        props = obtain_props(pwin)
     total_count = len(props)
 
     cols = get_cols()
@@ -269,10 +272,13 @@ def get_gis_info(pwin, filename):
     return prop_count
 
 
-def update_withdrawn(pwin, filename):
+def update_withdrawn(pwin, filename, test_flag):
 
     # Pull list of properties from website
-    props = obtain_props(pwin)  # Limit to 3 properties for testing
+    if test_flag:
+        props = obtain_props(pwin).head(3)  # Limit to 3 properties for testing
+    else:
+        props = obtain_props(pwin)
 
     if Path(filename).is_file():
         props_main = pd.read_csv(filename, sep=',', dtype=get_type())
