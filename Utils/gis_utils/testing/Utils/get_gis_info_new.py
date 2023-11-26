@@ -22,15 +22,10 @@ import numpy as np
 
 
 # adding utils to the system path
-sys.path.insert(0, 'C:/Users/ericd/OneDrive/Documents/Python Scripts/Tax_Sale/Utils')
+sys.path.insert(0, '/Utils')
 from tax_util import *
 from google_util import *
 
-#For future efforts - link to map
-# https://propertyviewer.andersoncountysc.org/mapsjs/?TMS=1491606003&disclaimer=false
-# https://anderson.postingpro.net/detail.aspx?needle=2461815 - but I don't know how to get this property number
-# https://acpass.andersoncountysc.org/asrdetails.cgs?mapno=0149160600300000
-# https://anderson.postingpro.net/SaleList.aspx
 
 def obtain_props(pwin):
 
@@ -52,14 +47,11 @@ def obtain_props(pwin):
     return props
 
 
-def get_gis_info(pwin, filename, test_flag):
+def get_gis_info(pwin, filename):
     import json
 
     # Pull list of properties from website
-    if test_flag:
-        props = obtain_props(pwin).head(5)  # Limit to 5 properties for testing
-    else:
-        props = obtain_props(pwin)
+    props = obtain_props(pwin)  # Can limit # of properties here for testing, just append .head(5)
     total_count = len(props)
 
     cols = get_cols()
@@ -84,19 +76,26 @@ def get_gis_info(pwin, filename, test_flag):
 
                 # Query property details
                 #tm = '1491606003'
-                params = {
-                    'f': 'json',
-                    'where': "TMS = '" + tm + "'",
-                    'outFields': '*'
-                }
-                # url = 'https://propertyviewer.andersoncountysc.org/arcgis/rest/services/NewPropertyViewer/MapServer/5/query?f=json&where=(TMS%20%3D%20%27'
-                # url = url + tm + '%27)&returnGeometry=true&spatialRel=esriSpatialRelIntersects&outFields=*&outSR=102733&dojo.preventCache=1696785811434'
+                url = 'https://propertyviewer.andersoncountysc.org/arcgis/rest/services/NewPropertyViewer/MapServer/5/query?f=json&where=(TMS%20%3D%20%27'
+                url = url + tm + '%27)&returnGeometry=true&spatialRel=esriSpatialRelIntersects&outFields=*&outSR=102733&dojo.preventCache=1696785811434'
 
-                url = 'https://propertyviewer.andersoncountysc.org/arcgis/rest/services/NewPropertyViewer/MapServer/5/query?'
+                #cookies = {'AGS_ROLES' : '419jqfa+uOZgYod4xPOQ8Q==',
+                #           'BNES_AGS_ROLES': '3nAIthS15VxpKWGb8Pr5byRQ5/Xmw3HLoUwpH8w/s1HhbKIAiFdf02nptsiDtFDZdCG6QmecoRfxNego8BJ42cXxDzs/0Zvaa5wliz/fs3w='}
 
-                response = run_query(url, params)
+                retries = Retry(
+                    total=3,
+                    backoff_factor=0.1,
+                    status_forcelist=[408, 429, 500, 502, 503, 504],
+                )
+                session = requests.Session()
+                session.mount('https://', HTTPAdapter(max_retries=retries))
+                response = session.get(url, verify=False)
+
+
+                # payload = {}
+                # headers = {}
+                # response = requests.request("GET", url, headers=headers, data=payload, verify=False, max_retries=retries)  # , cookies=cookies)
                 output = json.loads(response.text)
-
                 # "OBJECTID": "OBJECTID",
                 # "TMS": "TMS",
                 # "OWNER": "OWNER",
@@ -180,11 +179,8 @@ def get_gis_info(pwin, filename, test_flag):
                     #Call second website for additional details
                     tm2 = tm.rjust(11, '0') + '00000'
 
-                    params = {'mapno': tm2}
-                    url = 'https://acpass.andersoncountysc.org/asrdetails.cgs?'
-                    response = run_query(url, params)
-
-                    soup = BeautifulSoup(response.content, 'html.parser')
+                    req = requests.get('https://acpass.andersoncountysc.org/asrdetails.cgs?mapno=' + tm2)
+                    soup = BeautifulSoup(req.content, 'html.parser')
 
                     sp1 = 0
                     sp2 = 0
@@ -233,13 +229,14 @@ def get_gis_info(pwin, filename, test_flag):
                                 asmt_total = b.split('\n')[7].strip()
                             else:
                                 asmt_total = 'NaN'
-                            if appraised_bldg == 'NaN' or asmt_total == 'NaN':
+                            if appraised_land == 'NaN' or asmt_total == 'NaN':
                                bldg_ratio = 'NaN'
                             else:
-                                bldg_ratio = round(int(appraised_land)/int(asmt_total),2)
+                                bldg_ratio = (1 - round(int(appraised_land)/int(asmt_total),2)) * 100
 
-                    county_link = '=HYPERLINK("https://propertyviewer.andersoncountysc.org/mapsjs/?TMS=' + tm + '&disclaimer=false","County")'
-                    map_link = '=HYPERLINK("http://maps.google.com/maps?t=k&q=loc:' + str(lat) + '+' + str(lon) + '","Map")'
+                    county_link = 'https://propertyviewer.andersoncountysc.org/mapsjs/?TMS=' + tm + '&disclaimer=false'
+                    #map_link = '=HYPERLINK("http://maps.google.com/maps?t=k&q=loc:' + str(lat) + '+' + str(lon) + '","Map")'
+                    map_link = 'http://maps.google.com/maps?t=k&q=loc:' + str(lat) + '+' + str(lon)
 
                     #            'item',             'taxmap', 'account', 'owner',                    'address', 'subdiv', 'tax_dist',
                     #            'bldgs', 'acres', 'land_use','bldg_type', 'bedrooms', 'sq_ft', 'dpsf', 'yr_built','appraised_land', 'appraised_bldg', 'appraised_total',
@@ -258,13 +255,10 @@ def get_gis_info(pwin, filename, test_flag):
     return prop_count
 
 
-def update_withdrawn(pwin, filename, test_flag):
+def update_withdrawn(pwin, filename):
 
     # Pull list of properties from website
-    if test_flag:
-        props = obtain_props(pwin).head(3)  # Limit to 3 properties for testing
-    else:
-        props = obtain_props(pwin)
+    props = obtain_props(pwin)  # Limit to 3 properties for testing
 
     if Path(filename).is_file():
         props_main = pd.read_csv(filename, sep=',', dtype=get_type())

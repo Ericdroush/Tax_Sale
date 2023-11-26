@@ -107,9 +107,9 @@ def show_gui():
 
 def set_btn_get_info_color(*args):
     if os.path.isfile(get_filename()):
-        btn_get_info.config(bg = 'GREEN')
+        btn_get_info.config(bg='GREEN')
     else:
-        btn_get_info.config(bg = 'SystemButtonFace')
+        btn_get_info.config(bg='SystemButtonFace')
 
     update_status()
 
@@ -118,7 +118,7 @@ def main_get_property_info():
     print_text(pwin, 'Retrieving property GIS information...')
     print_text(pwin, ' * * *  This may take a while * * * ')
     c[combo_county.get().lower()].orig_count = (
-        sys.modules['Utils.gis_utils.' + combo_county.get().lower()].get_gis_info(pwin, get_filename()))
+        sys.modules['Utils.gis_utils.' + combo_county.get().lower()].get_gis_info(pwin, get_filename(), test_flag))
     c[combo_county.get().lower()].count = c[combo_county.get().lower()].orig_count
     c[combo_county.get().lower()].props_exist = True
     c[combo_county.get().lower()].last_updated = datetime.date.today().strftime('%m/%d/%Y')
@@ -131,7 +131,7 @@ def main_update_withdrawn():
     print_text(pwin, 'Updating currently available properties...')
 
     c[combo_county.get().lower()].count, c[combo_county.get().lower()].withdrawn_last = (
-        sys.modules['Utils.gis_utils.' + combo_county.get().lower()].update_withdrawn(pwin, get_filename()))
+        sys.modules['Utils.gis_utils.' + combo_county.get().lower()].update_withdrawn(pwin, get_filename(), test_flag))
     c[combo_county.get().lower()].last_updated = datetime.date.today().strftime('%m/%d/%Y')
 
     update_status()
@@ -233,6 +233,20 @@ def delete_data():
     set_btn_get_info_color()
 
     print_text(pwin, 'Data erased for ' + combo_county.get())
+
+def toggle_test():
+    global test_flag
+    if test_btn.config('relief')[-1] == 'sunken':
+        test_btn.config(relief="raised")
+        test_btn.config(bg='SystemButtonFace')
+        test_flag = False
+
+    else:
+        test_btn.config(relief="sunken")
+        test_btn.config(bg='RED')
+        test_flag = True
+
+    return test_flag
 
 
 ########################################################
@@ -397,7 +411,7 @@ ok_btn = tk.Button(
     height=1,
     command=close_window
 )
-ok_btn.grid(row=5, column=0, columnspan=3, padx=5, pady=5)
+ok_btn.grid(row=5, column=0, columnspan=2, padx=5, pady=5)
 
 del_btn = tk.Button(
     text="Delete Data",
@@ -405,10 +419,19 @@ del_btn = tk.Button(
     height=1,
     command=delete_data
 )
-del_btn.grid(row=5, column=3, padx=5, pady=5)
+del_btn.grid(row=5, column=2, padx=5, pady=5)
 
 set_btn_get_info_color() # Initializes the default county selection
 
+test_btn = tk.Button(
+    text="Test Mode",
+    width=25,
+    height=1,
+    relief="raised",
+    command=toggle_test
+)
+test_flag = False
+test_btn.grid(row=5, column=3, padx=5, pady=5)
 
 #################################################################
 #   Events Section

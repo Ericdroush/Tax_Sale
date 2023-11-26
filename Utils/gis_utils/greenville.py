@@ -36,11 +36,14 @@ def obtain_props(pwin):
     return props
 
 
-def get_gis_info(pwin, filename):
+def get_gis_info(pwin, filename, test_flag):
     import json
 
     # Pull list of properties from website
-    props = obtain_props(pwin)  # Limit to 5 properties for testing
+    if test_flag:
+        props = obtain_props(pwin).head(5)  # Limit to 5 properties for testing
+    else:
+        props = obtain_props(pwin)
     total_count = len(props)
 
     cols = get_cols()
@@ -65,23 +68,19 @@ def get_gis_info(pwin, filename):
 
                 # Query property details
                 #tm = '0687080101100'
-                url = 'https://www.gcgis.org/arcgis/rest/services/GreenvilleJS/Map_Layers_JS/MapServer/53/query?f=json&where=PIN%20%3D%20%27'
-                url = url + tm + '%27&returnGeometry=true&spatialRel=esriSpatialRelIntersects&maxAllowableOffset=4&geometryPrecision=0&outFields=*&outSR=6570'
+                params = {
+                    'f': 'json',
+                    'where': "PIN = '" + tm + "'",
+                    'outFields': '*'
+                }
+                # url = 'https://www.gcgis.org/arcgis/rest/services/GreenvilleJS/Map_Layers_JS/MapServer/53/query?f=json&where=PIN%20%3D%20%27'
+                # url = url + tm + '%27&returnGeometry=true&spatialRel=esriSpatialRelIntersects&maxAllowableOffset=4&geometryPrecision=0&outFields=*&outSR=6570'
 
-                retries = Retry(
-                    total=3,
-                    backoff_factor=0.1,
-                    status_forcelist=[408, 429, 500, 502, 503, 504],
-                )
-                session = requests.Session()
-                session.mount('https://', HTTPAdapter(max_retries=retries))
-                response = session.get(url)
+                url = 'https://www.gcgis.org/arcgis/rest/services/GreenvilleJS/Map_Layers_JS/MapServer/53/query?'
 
-
-                # payload = {}
-                # headers = {}
-                # response = requests.request("GET", url, headers=headers, data=payload)
+                response = run_query(url, params)
                 output = json.loads(response.text)
+
                 # "PIN": "PIN / Tax Map #",
                 # "OWNAM1": "Owner Name(MixedCase)",
                 # "OWNAM2": "Owner Name 2(MixedCase)",
@@ -122,8 +121,11 @@ def get_gis_info(pwin, filename):
                 # print(output['features'][0]['geometry']['rings'][0])
 
                 if len(output['features']) == 0:  # Didn't get something back from the website
-                    props_new.loc[0] = 'NaN'  # Fill with NaN
-                    props_new.to_csv(filename, mode='a', index=False, header=False)
+                    pass
+                    # props_new.loc[0] = 'NaN'  # Fill with NaN
+                    # props_new['item'].loc[0] = props['item'].iloc[prop]
+                    # props_new['taxmap'].loc[0] = tm
+                    # props_new.to_csv(filename, mode='a', index=False, header=False)
 
                 else:
                     prop_count += 1
@@ -142,12 +144,26 @@ def get_gis_info(pwin, filename):
                     account = 'NaN'
                     subdiv = attr['SUBDIV']
                     tax_dist = attr['DIST']
-                    if attr['IMPROVED'] == 'no':
+                    # if attr['IMPROVED'] == 'no':
+                    #     bldgs = 0
+                    # else:
+                    #     bldgs = 1
+                    acres = attr['TACRES']
+                    landuse = attr['LANDUSE']
+                    if landuse == 1180 or landuse == 9171 or landuse == 6800:  #This doesn't work, always goes to 1, maybe landuse is a text?
                         bldgs = 0
                     else:
                         bldgs = 1
-                    acres = attr['TACRES']
-                    landuse = attr['LANDUSE']
+                    # 1100 Residential Single Family
+                    # 1101 Residential Single Family with Auxiliary Use
+                    # 1170 Residential Mobile Home with Land
+                    # 1171 Residential Mobile Home on Mobile Home File
+                    # 1180 Residential Vacant
+                    # 1181 Homeowners Association Property
+                    # 1182 Common Area
+                    # 6800 Commercial Vacant
+                    # 9170 Agricultural Vacant
+                    # 9171 Agricultural Improved
                     bldg_type = attr['PROPTYPE']
                     bedrooms = attr['BEDROOMS']
                     sq_ft = attr['SQFEET']
@@ -159,6 +175,9 @@ def get_gis_info(pwin, filename):
                     dpsf = dpsf_calc(appraised_total, sq_ft)
 
                     corners = pd.DataFrame(data=output['features'][0]['geometry']['rings'][0], columns=['x', 'y'])
+                    if acres < 0.1:   # Only overwrite if acres wasn't defined
+                        acres = polygon_area(corners)
+
                     wkid = output['spatialReference']['latestWkid']
 
                     lat, lon = geo_convert(corners['x'].mean(), corners['y'].mean(), wkid)
@@ -168,7 +187,7 @@ def get_gis_info(pwin, filename):
                     bbox = str(corners['x'].min()) + '%2C' + str(corners['y'].min())  + '%2C' + str(corners['x'].max())  + '%2C' + str(corners['y'].max())
                     withdrawn = 'A'
 
-                    county_link = 'https://www.gcgis.org/apps/GreenvilleJS/?PIN=' + tm
+                    county_link = '=HYPERLINK("https://www.gcgis.org/apps/GreenvilleJS/?PIN=' + tm + '","County")'
                     map_link = '=HYPERLINK("http://maps.google.com/maps?t=k&q=loc:' + str(lat) + '+' + str(lon) + '","Map")'
 
                     #            'item',             'taxmap', 'account', 'owner',                    'address', 'subdiv', 'tax_dist',
@@ -178,7 +197,7 @@ def get_gis_info(pwin, filename):
                     data_list = [props['item'].iloc[prop], tm, account, props['owner'].iloc[prop], address, subdiv, tax_dist,
                              bldgs, acres, landuse, bldg_type, bedrooms, sq_ft, dpsf, 'NaN', 'NaN', 'NaN', appraised_total,
                              'NaN', sale_price, sale_date, 'NaN', bbox, lat, lon, 'NaN', 'NaN', 'NaN', withdrawn, county_link, map_link,
-                             props['amount_due'].iloc[prop].strip('$').strip(), '', '', '']
+                             float(props['amount_due'].iloc[prop].strip('$').replace(',','')), '', '', '']
 
                     props_new.loc[0] = data_list
                     props_new.to_csv(filename, mode='a', index=False, header=False)
@@ -188,10 +207,13 @@ def get_gis_info(pwin, filename):
     return prop_count
 
 
-def update_withdrawn(pwin, filename):
+def update_withdrawn(pwin, filename, test_flag):
 
     # Pull list of properties from website
-    props = obtain_props(pwin)  # Limit to 3 properties for testing
+    if test_flag:
+        props = obtain_props(pwin).head(3)  # Limit to 5 properties for testing
+    else:
+        props = obtain_props(pwin)
 
     if Path(filename).is_file():
         props_main = pd.read_csv(filename, sep=',', dtype=get_type())
