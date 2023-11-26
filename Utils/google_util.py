@@ -1,6 +1,6 @@
 import requests
 import json
-import Utils.key
+from Utils.key import key
 
 # Google API Key
 googleapi = 'https://maps.googleapis.com/maps/api/'
@@ -8,7 +8,7 @@ googleapi = 'https://maps.googleapis.com/maps/api/'
 
 def run_google_api(api_name, params):
 
-    params['key'] = Utils.key
+    params['key'] = key()
     response = requests.get(googleapi + api_name + '/json?', params)
 
     # print(response.text)
@@ -19,7 +19,6 @@ def reversegeo(lat, lon):
     params = {'latlng': str(lat) + ',' + str(lon)}
 
     output = run_google_api('geocode', params)
-
     if output['status'] == 'OK':
         add1 = output['plus_code']['compound_code']  # Actual center of property
         # add2 = output['results'][0]['formatted_address']  #Closest actual address - could be misleading, for reference

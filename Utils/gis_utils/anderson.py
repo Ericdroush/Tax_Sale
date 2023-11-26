@@ -233,10 +233,10 @@ def get_gis_info(pwin, filename, test_flag):
                                 asmt_total = b.split('\n')[7].strip()
                             else:
                                 asmt_total = 'NaN'
-                            if appraised_land == 'NaN' or asmt_total == 'NaN':
+                            if appraised_bldg == 'NaN' or asmt_total == 'NaN':
                                bldg_ratio = 'NaN'
                             else:
-                                bldg_ratio = (1 - round(int(appraised_land)/int(asmt_total),2)) * 100
+                                bldg_ratio = round(int(appraised_land)/int(asmt_total),2)
 
                     county_link = '=HYPERLINK("https://propertyviewer.andersoncountysc.org/mapsjs/?TMS=' + tm + '&disclaimer=false","County")'
                     map_link = '=HYPERLINK("http://maps.google.com/maps?t=k&q=loc:' + str(lat) + '+' + str(lon) + '","Map")'

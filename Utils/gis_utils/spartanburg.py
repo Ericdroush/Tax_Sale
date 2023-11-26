@@ -5,6 +5,13 @@ Created on Wed Sep 21 19:44:27 2022
 Steps:
     Need to get the newspaper add and save as a CSV
 
+Open Issues:
+    Second site list "condition" - not sure how accurate or what to do with it
+    I don't know where to get the amount due, but that's a big hole in this process
+    Can't figure out how to create link to Spartanburg OneMap GIS
+        https://maps.spartanburgcounty.org/portal/apps/webappviewer/index.html?id=8a88ed02adb845938c81f8c0c4214b9e&fbclid=IwAR3OKvDcpr8nzClR45GwrGJOmsErJTz3P-nr9dwwLnxT-VAKIsViiio33fM
+    It appears I can get a reliable address from the second site but needs investigating to see how reliable it is - currently storing as account
+
 @author: ericd
 """
 
@@ -14,12 +21,29 @@ from pathlib import Path
 import sys
 import time
 from datetime import date
-import numpy as np
+
+# For Selenium calls
+from selenium import webdriver
+from selenium.webdriver import Chrome
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+import math
+
 
 # adding utils to the system path
 sys.path.insert(0, 'C:/Users/ericd/OneDrive/Documents/Python Scripts/Tax_Sale/Utils')
 from tax_util import *
 from google_util import *
+
+def pull_data(driver, xpath):
+    try:
+        out = driver.find_element(By.XPATH, xpath).get_attribute(
+            "textContent").replace('$', '').replace(',', '').strip()
+    except:
+        out = 'NaN'
+
+    return out
 
 
 def obtain_props(pwin):
@@ -29,11 +53,13 @@ def obtain_props(pwin):
     # Click on Real Estate
     # On the new webpage press Ctrl+A to select all and Ctrl+C to copy
     # Paste in a text file called props_from_web.csv in this directory
-    #   C:\Users\ericd\OneDrive\Documents\Python Scripts\Tax_Sale\Counties\Spartangburg
+    #   C:\Users\ericd\OneDrive\Documents\Python Scripts\Tax_Sale\Counties\Spartanburg
 
     print_text(pwin, 'Retrieving tax sale properties ...')
 
     filename = 'Counties/Spartanburg/props_from_web.csv'
+    from glob import glob
+    import os
     with open(filename) as f:
         props = f.readlines()
 
@@ -62,6 +88,18 @@ def obtain_props(pwin):
 
 def get_gis_info(pwin, filename, test_flag):
     import json
+
+    # Selenium Setup
+    options = webdriver.ChromeOptions()
+    options.add_argument("--headless")  # Set the Chrome webdriver to run in headless mode for scalability
+    user_agent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/83.0.4103.116 Safari/537.36'
+    options.add_argument(f'user-agent={user_agent}')
+
+    # Pass the defined options objects to initialize the web driver
+    driver = Chrome(options=options)
+    # Set an implicit wait of 5 seconds to allow time for elements to appear before throwing an exception - waits up to 5 seconds, not a min wait time like sleep
+    driver.implicitly_wait(30)
+    #wait = WebDriverWait(driver, 30)
 
     # Pull list of properties from website
     if test_flag:
@@ -154,24 +192,16 @@ def get_gis_info(pwin, filename, test_flag):
                     # print(attr)
                     # Direct read parameters
                     item = props['item'].iloc[prop]
-                    account = 'NaN'
+                    # account = 'NaN'  # Currently highjacking this column for address 2
                     owner = attr['OwnerName']
                     subdiv = attr['SUBDIVISION']
                     tax_dist = attr['District']
-                    landuse = 'NaN'
-                    bldg_type = 'NaN'
                     bedrooms = 'NaN'
-                    sq_ft = 'NaN'
-                    appraised_total = 'NaN'
                     #sale_price = attr['SALE_PRICE']
-                    sale_date = from_excel_serial(attr['SaleDate'] / 86400 / 1000 + 25569)
-                    bldgs = 'NaN'
+                    #sale_date = from_excel_serial(attr['SaleDate'] / 86400 / 1000 + 25569)
                     yr_built = attr['YearBuilt']
 
                     # Calculated parameters
-                    #dpsf =  dpsf_calc(appraised_total, sq_ft)
-                    dpsf = 'NaN'  #Hard code to NaN since sq_ft not available for this county
-
                     corners = pd.DataFrame(data=output['features'][0]['geometry']['rings'][0], columns=['x', 'y'])
                     acres = polygon_area(corners)
 
@@ -183,73 +213,66 @@ def get_gis_info(pwin, filename, test_flag):
                     bbox = str(corners['x'].min()) + '%2C' + str(corners['y'].min())  + '%2C' + str(corners['x'].max())  + '%2C' + str(corners['y'].max())
                     withdrawn = 'A'
 
-                    #Call second website for additional details
-                    params = {
-                        'AppID': '857',
-                        'LayerID': '16069',
-                        'PageTypeID': '4',
-                        'PageID': '7149',
-                        'Q': '692867197',
-                        'KeyValue': tm
+                    # Pull additional data from the qpublic site
+                    url = 'https://qpublic.schneidercorp.com/Application.aspx?AppID=857&LayerID=16069&PageTypeID=4&PageID=7149&Q=692867197&KeyValue='
+                    url = url + tm
 
-                    }
-                    url = 'https://qpublic.schneidercorp.com/Application.aspx?'
-                    response = run_query(url, param)
+                    driver = Chrome(options=options)
+                    # Set an implicit wait of 5 seconds to allow time for elements to appear before throwing an exception - waits up to 5 seconds, not a min wait time like sleep
+                    driver.implicitly_wait(30)
 
-                    soup = BeautifulSoup(response.content, 'html.parser')
+                    driver.get(url)
+                    #wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, 'section#ctlBodyPane_ctl00_mSection')))
 
 
-                    sp1 = 0
-                    sp2 = 0
-                    for a in soup.find_all('td', text='Date'):
-                        b = a.parent.find_next('tr').get_text()
-                        if b.count('\n') > 4:  # This line has sales dat
-                            sd1 = b.split('\n')[1]
-                            c = b.split('\n')[4].replace('$', '').replace(',', '').strip()
-                            if len(c) > 0:
-                                sp1 = float(c)
-                            else:
-                                sp1 = 0
-                            if sp1 < 11:  # Screen for junk sales
-                                b = a.parent.find_next('tr').find_next('tr').get_text()
-                                if b.count('\n') > 4:  # This line has sales dat
-                                    sd2 = b.split('\n')[1]
-                                    c = b.split('\n')[4].replace('$', '').replace(',', '').strip()
-                                    if len(c) > 0:
-                                        sp2 = float(c)
-                                    else:
-                                        sp2 = 0
+                    #Address - put in account for testing purposes
+                    account = pull_data(driver,
+                                        '//*[@id="ctlBodyPane_ctl00_ctl01_dynamicSummary_rptrDynamicColumns_ctl07_pnlSingleValue"]')
+                    sq_ft = float(pull_data(driver,
+                                            '//*[@id="ctlBodyPane_ctl06_ctl01_frmView_ctl00_lblFinishedSqFt"]'))  # Residential properties
+                    if math.isnan(sq_ft):
+                        sq_ft = float(pull_data(driver,
+                                                '//*[@id="ctlBodyPane_ctl07_ctl01_frmView_ctl00_lblFinishedSqFt"]'))  # Commercial properties
+                    subdiv = pull_data(driver,
+                                            '// *[ @ id = "ctlBodyPane_ctl00_ctl01_dynamicSummary_rptrDynamicColumns_ctl09_pnlSingleValue"]')  # Residential properties
 
-                    if sp1 == 0 and sp2 == 0:
-                        sale_price = 'NaN'
-                        sale_date = 'NaN'
-                    elif sp1 >= sp2:
-                        sale_price = sp1
-                        sale_date = sd1
+                    condition = pull_data(driver, '//*[@id="ctlBodyPane_ctl06_ctl01_frmView_ctl00_lblCondition"]')
+                    if condition == 'NaN':
+                        condition = pull_data(driver, '//*[@id="ctlBodyPane_ctl07_ctl01_frmView_ctl00_lblCondition"]')
+
+                    bldg_type = pull_data(driver,
+                                          '//*[@id="ctlBodyPane_ctl00_ctl01_dynamicSummary_rptrDynamicColumns_ctl10_pnlSingleValue"]')
+                    if '(' in bldg_type and ')' in bldg_type:
+                        landuse = bldg_type[bldg_type.find(start := '(') + len(start):bldg_type.find(')')]
                     else:
-                        sale_price = sp2
-                        sale_date = sd2
+                        landuse = 'NaN'
+                    bldgs = pull_data(driver, '//*[@id="ctlBodyPane_ctl04_ctl01_gvwFees"]/tbody/tr/td[1]')
+                    if bldgs == 'NaN':
+                        bldgs = '0'
 
-                    # Could get subdivision here if needed
-                    for a in soup.find_all('div', text=str(date.today().year)):
-                        b = a.parent.parent.get_text()  # Year, Acre, lots, Land Asmt, #Bldg, Bldg Asmt, Tot Asmt, Rat CD, RC
-                        if b.count('\n') > 4:
-                            if len(b.split('\n')[4].strip()) > 0:
-                                appraised_land = b.split('\n')[4].strip()
-                            else:
-                                appraised_land = 'NaN'
-                            if len(b.split('\n')[6].strip()) > 0:
-                                appraised_bldg = b.split('\n')[6].strip()
-                            else:
-                                appraised_bldg = 'NaN'
-                            if len(b.split('\n')[7].strip()) > 0:
-                                asmt_total = b.split('\n')[7].strip()
-                            else:
-                                asmt_total = 'NaN'
-                            if appraised_land == 'NaN' or asmt_total == 'NaN':
-                               bldg_ratio = 'NaN'
-                            else:
-                                bldg_ratio = (1 - round(int(appraised_land)/int(asmt_total),2)) * 100
+                    sale_date = pull_data(driver, '//*[@id="ctlBodyPane_ctl10_ctl01_gvwList"]/tbody/tr[1]/th')
+                    sale_price = float(pull_data(driver, '//*[@id="ctlBodyPane_ctl10_ctl01_gvwList"]/tbody/tr[1]/td[1]'))
+                    if sale_price < 11:
+                        sd1 = pull_data(driver, '//*[@id="ctlBodyPane_ctl10_ctl01_gvwList"]/tbody/tr[2]/th')
+                        sp1 = float(pull_data(driver, '//*[@id="ctlBodyPane_ctl10_ctl01_gvwList"]/tbody/tr[2]/td[1]'))
+                        if sp1 > 11:
+                            sale_price = sp1
+                            sale_date = sd1
+
+                    appraised_land = float(
+                        pull_data(driver, '//*[@id="ctlBodyPane_ctl03_ctl01_grdValuation"]/tbody/tr[1]/td[2]'))
+                    appraised_bldg = float(
+                        pull_data(driver, '//*[@id="ctlBodyPane_ctl03_ctl01_grdValuation"]/tbody/tr[2]/td[2]'))
+
+                    driver.quit()
+
+                    appraised_total = appraised_land + appraised_bldg
+                    dpsf = dpsf_calc(appraised_total, sq_ft)
+
+                    if math.isnan(appraised_land) or math.isnan(appraised_bldg):
+                        bldg_ratio = float('NaN')
+                    else:
+                        bldg_ratio = round(appraised_bldg/appraised_total,2)
 
                     county_link = '=HYPERLINK("https://propertyviewer.andersoncountysc.org/mapsjs/?TMS=' + tm + '&disclaimer=false","County")'
                     map_link = '=HYPERLINK("http://maps.google.com/maps?t=k&q=loc:' + str(lat) + '+' + str(lon) + '","Map")'
@@ -260,14 +283,16 @@ def get_gis_info(pwin, filename, test_flag):
                     #             'bldg_ratio', 'sale_price', 'sale_date', 'lake%', 'bbox', 'lat', 'lon', 'dist1', 'dist2', 'dist3', 'withdrawn', 'county_link', 'map_link',
                     #            'amount_due', 'comments', 'rating', 'bid'
                     data_list = [item, tm, account, owner, address, subdiv, tax_dist,
-                             bldgs, acres, landuse, bldg_type, bedrooms, sq_ft, dpsf, yr_built, appraised_land, appraised_bldg, appraised_total,
-                             bldg_ratio, sale_price, sale_date, 'NaN', bbox, lat, lon, 'NaN', 'NaN', 'NaN', withdrawn, county_link, map_link,
-                             float(props['amount_due'].iloc[prop].strip('$').replace(',','')), '', '', '']
+                        bldgs, acres, landuse, bldg_type, bedrooms, sq_ft, dpsf, yr_built, appraised_land, appraised_bldg, appraised_total,
+                        bldg_ratio, sale_price, sale_date, 'NaN', bbox, lat, lon, 'NaN', 'NaN', 'NaN', withdrawn, county_link, map_link,
+                        'NaN', '', '', '']
 
                     props_new.loc[0] = data_list
                     props_new.to_csv(filename, mode='a', index=False, header=False)
-        else:  # if tm is already found... occurs when you need to restart
+        else: # if tm is already found... occurs when you need to restart
             prop_count += 1
+
+    driver.quit()
 
     return prop_count
 

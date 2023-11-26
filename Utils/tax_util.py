@@ -104,7 +104,7 @@ def polygon_area(points):
 
     return area / 2 / 43560
 
-def run_query(url, params):
+def run_query(url, params, verify=False):
 
     retries = Retry(
         total=3,
@@ -113,5 +113,5 @@ def run_query(url, params):
     )
     session = requests.Session()
     session.mount('https://', HTTPAdapter(max_retries=retries))
-    return session.get(url, params=params, verify=False)
+    return session.get(url, params=params, verify=verify)
 

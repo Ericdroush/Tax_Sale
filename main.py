@@ -235,14 +235,19 @@ def delete_data():
     print_text(pwin, 'Data erased for ' + combo_county.get())
 
 def toggle_test():
+    global test_flag
     if test_btn.config('relief')[-1] == 'sunken':
         test_btn.config(relief="raised")
         test_btn.config(bg='SystemButtonFace')
         test_flag = False
+
     else:
         test_btn.config(relief="sunken")
         test_btn.config(bg='RED')
         test_flag = True
+
+    return test_flag
+
 
 ########################################################
 # GUI Portion of code
@@ -422,6 +427,7 @@ test_btn = tk.Button(
     text="Test Mode",
     width=25,
     height=1,
+    relief="raised",
     command=toggle_test
 )
 test_flag = False

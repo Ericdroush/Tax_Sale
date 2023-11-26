@@ -9,7 +9,7 @@ from bs4 import BeautifulSoup
 
 
 # adding utils to the system path
-sys.path.insert(0, '/Utils')
+sys.path.insert(0, 'gis_utils/testing/Utils')
 from tax_util import *
 
 tm = '5-14-07-014.00'
@@ -20,7 +20,8 @@ params = {
     'LayerID': '16069',
     'PageTypeID': '4',
     'PageID': '7149',
-    'Q': '1612596104',
+    'Q': '692867197',
+    # 'Q': '1612596104',
     'KeyValue': tm
 
 }
@@ -34,6 +35,7 @@ params = {
 # }
 
 url = 'https://beacon.schneidercorp.com/Application.aspx?'
+url = 'https://qpublic.schneidercorp.com/Application.aspx?AppID=857&LayerID=16069&PageTypeID=4&PageID=7149&Q=692867197&KeyValue=5-14-07-014.00'
 
 retries = Retry(
     total=3,
