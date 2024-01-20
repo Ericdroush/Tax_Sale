@@ -29,6 +29,7 @@ import time
 from Utils.County_Class import CountyClass
 from Utils.google_util import find_distance
 from Utils.tax_util import print_text, get_type
+import qt_ui
 
 counties_list = [x.split('\\')[1].rstrip('.py') for x in glob('Utils/gis_utils/*.py')]
 
@@ -253,24 +254,7 @@ def toggle_test():
 # GUI Portion of code
 ########################################################
 
-window = tk.Tk()
-window.title("Tax Sale Property Screening Tool")
-
-for i in range(4):
-    window.columnconfigure(i, weight=1) #, minsize=75)
-
-for i in range(4):
-    window.rowconfigure(i, weight=1) #, minsize=50)
-
-########################################################
-# County Frame
-########################################################
-frm_county = tk.Frame(master=window, relief=tk.SUNKEN, borderwidth=3)
-frm_county.grid(row=0, column=0,rowspan=2, columnspan=2, padx=5, pady=5, sticky=tk.NSEW)
-
-combo_county = ttk.Combobox(
-    master=frm_county,
-    state='readonly',
+#Add counties to combobox
     values=[county.title() for county in counties_list],
 )
 combo_county.bind('<<ComboboxSelected>>', set_btn_get_info_color)
