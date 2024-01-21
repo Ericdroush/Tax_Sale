@@ -64,7 +64,7 @@ def get_type():
     return type_dict
 
 
-def get_and_clean_data(verbose):
+def get_and_clean_data(verbose, flag='full'):
     props = pd.read_csv('gvl_temp.csv', dtype=get_type())
     if verbose:
         print('Number of properties read in:', len(props))
@@ -105,11 +105,20 @@ def get_and_clean_data(verbose):
     to_remove = ['lat', 'long', 'bid', 'max_int', 'Column1', 'Column2', 'Column3']
     # to_remove.append('item')  # There could be some trend throughout the day
     # to_remove.append('sale_price')  # Should be a correlation, but the input is sketchy - lots of $10 properties
-    #to_remove.append('amount_due')
+    # to_remove.append('amount_due')
     props.drop(columns=to_remove, inplace=True)
     if verbose:
-        print('Manually removed columns', '\n')
-        print(to_remove)
+        print('Manually removed columns')
+        print(to_remove, '\n')
+
+    if flag == 'land':
+        props = props.loc[props['bldgs'] == 0]
+        if verbose:
+            print('Number of land only properties:', len(props), '\n')
+    elif flag == 'houses':
+        props = props.loc[props['bldgs'] > 0]
+        if verbose:
+            print('Number of house properties:', len(props), '\n')
 
     fit_cols = props.columns.tolist()
     if verbose:
@@ -242,7 +251,7 @@ def predict_new(fit_cols):
     props_new.to_csv('gvl_temp_w_bid.csv', index=False, na_rep='NaN')
     return
 
-props, fit_cols = get_and_clean_data(True)
+props, fit_cols = get_and_clean_data(True, 'land')
 
 y = props['Actual']
 props.drop(columns='Actual', inplace=True)
@@ -258,7 +267,7 @@ print('XGBoost MAE:', xgb_mae)
 
 
 # optimize_rf(rf_mae, train_X, val_X, train_y, val_y)
-#mae, n_estimators, learning_rate = optimize_xgb(train_X, val_X, train_y, val_y)
+# mae, n_estimators, learning_rate = optimize_xgb(train_X, val_X, train_y, val_y)
 # xgb_mae = runXGB(train_X, val_X, train_y, val_y, n_estimators=n_estimators, learning_rate=learning_rate, save=True)
 # print('XGBoost MAE:', xgb_mae)
 #
