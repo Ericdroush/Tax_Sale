@@ -105,7 +105,7 @@ def get_and_clean_data(verbose, flag='full'):
     to_remove = ['lat', 'long', 'bid', 'max_int', 'Column1', 'Column2', 'Column3']
     # to_remove.append('item')  # There could be some trend throughout the day
     # to_remove.append('sale_price')  # Should be a correlation, but the input is sketchy - lots of $10 properties
-    # to_remove.append('amount_due')
+    # to_remove.append('appraised_total')
     props.drop(columns=to_remove, inplace=True)
     if verbose:
         print('Manually removed columns')
@@ -251,7 +251,7 @@ def predict_new(fit_cols):
     props_new.to_csv('gvl_temp_w_bid.csv', index=False, na_rep='NaN')
     return
 
-props, fit_cols = get_and_clean_data(True, 'land')
+props, fit_cols = get_and_clean_data(True, 'houses')
 
 y = props['Actual']
 props.drop(columns='Actual', inplace=True)
