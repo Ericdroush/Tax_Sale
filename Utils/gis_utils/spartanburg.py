@@ -29,12 +29,12 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 import math
+from Utils.tax_util import *
+from Utils.google_util import *
 
 
 # adding utils to the system path
-sys.path.insert(0, 'C:/Users/ericd/OneDrive/Documents/Python Scripts/Tax_Sale/Utils')
-from tax_util import *
-from google_util import *
+# sys.path.insert(0, 'C:/Users/ericd/OneDrive/Documents/Python Scripts/Tax_Sale/Utils')
 
 def pull_data(driver, xpath):
     try:
@@ -126,10 +126,10 @@ def get_gis_info(pwin, filename, test_flag):
         if not (props_old['taxmap'].eq(tm)).any():
 
             if len(str(tm)) > 5:  # Check for valid TaxMap ID
-                #print(tm)
+                # print(tm)
 
                 # Query property details
-                #tm = '7-11-07-067.00'
+                # tm = '7-11-07-067.00'
                 params = {
                     'f': 'json',
                     'where': "MAPNUMBER = '" + tm + "'",
@@ -208,9 +208,9 @@ def get_gis_info(pwin, filename, test_flag):
                     wkid = output['spatialReference']['latestWkid']
                     lat, lon = geo_convert(corners['x'].mean(), corners['y'].mean(), wkid)
 
-                    address = reversegeo(lat, lon)
+                    address = reverse_geo(lat, lon)
 
-                    bbox = str(corners['x'].min()) + '%2C' + str(corners['y'].min())  + '%2C' + str(corners['x'].max())  + '%2C' + str(corners['y'].max())
+                    bbox = box_maker(corners)
                     withdrawn = 'A'
 
                     # Pull additional data from the qpublic site

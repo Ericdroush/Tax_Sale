@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Created on Wed Sep 21 19:44:27 2022
+This is the has overall logic for looking up country information - it calls county specific functions
 
 @author: ericd
 """
@@ -12,9 +12,6 @@ import time
 from Utils.tax_util import *
 from Utils.google_util import *
 
-# adding utils to the system path
-# sys.path.insert(0, 'C:/Users/ericd/OneDrive/Documents/Python Scripts/Tax_Sale/Utils')
-
 
 def obtain_props(pwin):
     import io
@@ -25,7 +22,7 @@ def obtain_props(pwin):
     soup = BeautifulSoup(req.content, 'html.parser')
 
     a = soup.find_all('table')
-    props = pd.read_html(io.StringIO(str(a)))[0]   #Item #, Map #, Name, Amount Due
+    props = pd.read_html(io.StringIO(str(a)))[0]   # Item #, Map #, Name, Amount Due
     props.columns = ['item', 'taxmap', 'owner', 'amount_due']  # Translate into standard names
 
     print_text(pwin, str(len(props)) + ' tax sale properties has been retrieved...')

@@ -26,9 +26,9 @@ import importlib
 import datetime
 import ast
 import time
-from Utils.County_Class import CountyClass
-from Utils.google_util import find_distance
-from Utils.tax_util import print_text, get_type
+from Tests import CountyClass
+from Tests import find_distance
+from Tests import print_text, get_type
 
 counties_list = [x.split('\\')[1].rstrip('.py') for x in glob('Utils/gis_utils/*.py')]
 

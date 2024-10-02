@@ -1,4 +1,0 @@
-Spartanburg
-{'name': 'anderson', 'props_exist': True, 'addr1': '316 Boulevard, Anderson, SC 29621', 'addr2': 'Enter Address 2', 'addr3': 'Enter Address 3', 'distance_calcd': True, 'lakes_found': True, 'last_updated': '10/15/2023', 'count': 973, 'rated': 18, 'rated_high': 12, 'orig_count': 1053, 'withdrawn_last': 92}
-{'name': 'greenville', 'props_exist': True, 'addr1': 'Enter Address 1', 'addr2': 'Enter Address 2', 'addr3': 'Enter Address 3', 'distance_calcd': False, 'lakes_found': True, 'last_updated': '11/12/2023', 'count': 493, 'rated': 0, 'rated_high': 0, 'orig_count': 493, 'withdrawn_last': 0}
-{'name': 'spartanburg', 'props_exist': True, 'addr1': 'Enter Address 1', 'addr2': 'Enter Address 2', 'addr3': 'Enter Address 3', 'distance_calcd': False, 'lakes_found': False, 'last_updated': '11/25/2023', 'count': 5, 'rated': 0, 'rated_high': 0, 'orig_count': 5, 'withdrawn_last': 0}

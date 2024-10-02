@@ -1,6 +1,6 @@
 import requests
 import json
-from Utils.key import key
+import os
 
 # Google API Key
 googleapi = 'https://maps.googleapis.com/maps/api/'
@@ -8,23 +8,28 @@ googleapi = 'https://maps.googleapis.com/maps/api/'
 
 def run_google_api(api_name, params):
 
-    params['key'] = key()
+    if "GOOGLE_API_KEY" not in os.environ:
+        print('You need to create a Google API and place the key in an environment variable \n')
+        print('called "GOOGLE_API_KEY" \n')
+    params['key'] = os.environ["GOOGLE_API_KEY"]
     response = requests.get(googleapi + api_name + '/json?', params)
 
     # print(response.text)
     return json.loads(response.text)
 
-def reversegeo(lat, lon):
+
+def reverse_geo(lat, lon):
 
     params = {'latlng': str(lat) + ',' + str(lon)}
 
     output = run_google_api('geocode', params)
     if output['status'] == 'OK':
         add1 = output['plus_code']['compound_code']  # Actual center of property
-        # add2 = output['results'][0]['formatted_address']  #Closest actual address - could be misleading, for reference
+        # add2 = output['results'][0]['formatted_address']  #Closest actual address - could be misleading
     else:
         add1 = 'Failed'
     return add1
+
 
 def geocode(address):
 
@@ -38,6 +43,7 @@ def geocode(address):
     else:
         lat = lon = 'Failed'
     return [lat, lon]
+
 
 def find_distance(origin, destinations):
 
@@ -67,7 +73,8 @@ def find_distance(origin, destinations):
         for i in range(3):
             if i <= dest_count - 1:
                 try:
-                    dist.append(round(output['rows'][0]['elements'][i]['distance']['value'] / 1609, 1))  # Convert meters to miles
+                    # Convert meters to miles
+                    dist.append(round(output['rows'][0]['elements'][i]['distance']['value'] / 1609, 1))
                 except:
                     dist.append('Failed')
                     print(output)
@@ -77,4 +84,3 @@ def find_distance(origin, destinations):
         dist.append('Failed')
 
     return dist
-

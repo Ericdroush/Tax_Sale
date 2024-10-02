@@ -18,15 +18,14 @@ import sys
 import time
 from datetime import date
 import numpy as np
-
+from Utils.tax_util import *
+from Utils.google_util import *
 
 
 # adding utils to the system path
-sys.path.insert(0, 'C:/Users/ericd/OneDrive/Documents/Python Scripts/Tax_Sale/Utils')
-from tax_util import *
-from google_util import *
+# sys.path.insert(0, 'C:/Users/ericd/OneDrive/Documents/Python Scripts/Tax_Sale/Utils')
 
-#For future efforts - link to map
+# For future efforts - link to map
 # https://propertyviewer.andersoncountysc.org/mapsjs/?TMS=1491606003&disclaimer=false
 # https://anderson.postingpro.net/detail.aspx?needle=2461815 - but I don't know how to get this property number
 # https://acpass.andersoncountysc.org/asrdetails.cgs?mapno=0149160600300000
@@ -36,7 +35,7 @@ def obtain_props(pwin):
 
     print_text(pwin, 'Retrieving tax sale properties ...')
     cols = ['item', 'owner', 'tax_dist', 'prop_desc', 'taxmap', 'owner2', 'deedbook', 'page', 'yearsdue',
-               'amount_due', 'pct', 'blank1', 'blank2']  # Translate into standard names
+            'amount_due', 'pct', 'blank1', 'blank2']  # Translate into standard names
     with open('Counties/Anderson/NewspaperAd.csv') as f:
         test_prop = f.readlines()
 
@@ -45,7 +44,8 @@ def obtain_props(pwin):
             skip_count = line
             break
 
-    props = pd.read_csv('Counties/Anderson/NewspaperAd.csv', sep=',', dtype=str, skiprows=skip_count, names = cols)
+    props = pd.read_csv('Counties/Anderson/NewspaperAd.csv', sep=',', dtype=str, skiprows=skip_count,
+                        names=cols)
 
     print_text(pwin, str(len(props)) + ' tax sale properties has been retrieved...')
 
@@ -89,10 +89,8 @@ def get_gis_info(pwin, filename, test_flag):
                     'where': "TMS = '" + tm + "'",
                     'outFields': '*'
                 }
-                # url = 'https://propertyviewer.andersoncountysc.org/arcgis/rest/services/NewPropertyViewer/MapServer/5/query?f=json&where=(TMS%20%3D%20%27'
-                # url = url + tm + '%27)&returnGeometry=true&spatialRel=esriSpatialRelIntersects&outFields=*&outSR=102733&dojo.preventCache=1696785811434'
 
-                url = 'https://propertyviewer.andersoncountysc.org/arcgis/rest/services/NewPropertyViewer/MapServer/5/query?'
+                url = ('https://propertyviewer.andersoncountysc.org/arcgis/rest/services/NewPropertyViewer/MapServer/5/query?')
 
                 response = run_query(url, params)
                 output = json.loads(response.text)
@@ -159,25 +157,26 @@ def get_gis_info(pwin, filename, test_flag):
                     bedrooms = 'NaN'
                     sq_ft = 'NaN'
                     appraised_total = attr['MRKT_VALUE']
-                    #sale_price = attr['SALE_PRICE']
-                    #sale_date = attr['SALE_YEAR']
+                    # sale_price = attr['SALE_PRICE']
+                    # sale_date = attr['SALE_YEAR']
                     bldgs = attr['IMPRV']
                     yr_built = 'NaN'
 
                     # Calculated parameters
-                    #dpsf =  dpsf_calc(appraised_total, sq_ft)
-                    dpsf = 'NaN'  #Hard code to NaN since sq_ft not available for this county
+                    # dpsf = dpsf_calc(appraised_total, sq_ft)
+                    dpsf = 'NaN'  # Hard code to NaN since sq_ft not available for this county
 
                     corners = pd.DataFrame(data=output['features'][0]['geometry']['rings'][0], columns=['x', 'y'])
                     wkid = output['spatialReference']['latestWkid']
                     lat, lon = geo_convert(corners['x'].mean(), corners['y'].mean(), wkid)
 
-                    address = reversegeo(lat, lon)
+                    address = reverse_geo(lat, lon)
 
-                    bbox = str(corners['x'].min()) + '%2C' + str(corners['y'].min())  + '%2C' + str(corners['x'].max())  + '%2C' + str(corners['y'].max())
+                    bbox = box_maker(corners)
+
                     withdrawn = 'A'
 
-                    #Call second website for additional details
+                    # Call second website for additional details
                     tm2 = tm.rjust(11, '0') + '00000'
 
                     params = {'mapno': tm2}
@@ -283,6 +282,7 @@ def update_withdrawn(pwin, filename, test_flag):
         print_text(pwin, 'Opps!  You need to read properties first!')
 
     return new_count, withdrawn_count
+
 
 def find_lake_props(pwin, filename):
     from urllib.request import urlopen
