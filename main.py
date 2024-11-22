@@ -17,22 +17,22 @@ Dependencies:
 
 import tkinter as tk
 import tkinter.ttk as ttk
-import pandas as pd
 from pandasgui import show
-from glob import glob
-import os
 import sys
 import importlib
-import datetime
+from datetime import datetime
 import ast
-import time
-from Tests import CountyClass
-from Tests import find_distance
-from Tests import print_text, get_type
+import warnings
+from Utils.gis_utils.county_driver import *
+from Utils.County_Class import CountyClass
+from Utils.google_util import find_distance
+from Utils.tax_util import print_text, get_type
 
-counties_list = [x.split('\\')[1].rstrip('.py') for x in glob('Utils/gis_utils/*.py')]
+# Ignore the warnings about SSL calls to county websites
+warnings.filterwarnings("ignore")
 
-#import Utils.gis_utils.greenville
+counties_list = get_counties()
+
 c = {}
 for county in counties_list:
     mod = importlib.import_module('Utils.gis_utils.' + county, package=None)
@@ -98,7 +98,7 @@ def show_gui():
     props = read_props()
     print_text(pwin, 'Starting gui...')
     gui = show(props)
-    #, settings={'theme':'dark'}
+    # , settings={'theme':'dark'}
     # Code pauses while the gui is open
     props_new = gui['props']
     count_rated(props_new)
@@ -117,11 +117,10 @@ def set_btn_get_info_color(*args):
 def main_get_property_info():
     print_text(pwin, 'Retrieving property GIS information...')
     print_text(pwin, ' * * *  This may take a while * * * ')
-    c[combo_county.get().lower()].orig_count = (
-        sys.modules['Utils.gis_utils.' + combo_county.get().lower()].get_gis_info(pwin, get_filename(), test_flag))
+    c[combo_county.get().lower()].orig_count = get_gis_info(combo_county.get().lower(), pwin, get_filename(), test_flag)
     c[combo_county.get().lower()].count = c[combo_county.get().lower()].orig_count
     c[combo_county.get().lower()].props_exist = True
-    c[combo_county.get().lower()].last_updated = datetime.date.today().strftime('%m/%d/%Y')
+    c[combo_county.get().lower()].last_updated = datetime.today().strftime('%m/%d/%Y')
 
     set_btn_get_info_color('')
     print_text(pwin, 'Done retrieving...')
@@ -130,9 +129,9 @@ def main_get_property_info():
 def main_update_withdrawn():
     print_text(pwin, 'Updating currently available properties...')
 
-    c[combo_county.get().lower()].count, c[combo_county.get().lower()].withdrawn_last = (
-        sys.modules['Utils.gis_utils.' + combo_county.get().lower()].update_withdrawn(pwin, get_filename(), test_flag))
-    c[combo_county.get().lower()].last_updated = datetime.date.today().strftime('%m/%d/%Y')
+    c[combo_county.get().lower()].count, c[combo_county.get().lower()].withdrawn_last = \
+        (update_withdrawn(combo_county.get().lower(), pwin, get_filename(), test_flag))
+    c[combo_county.get().lower()].last_updated = datetime.today().strftime('%m/%d/%Y')
 
     update_status()
     print_text(pwin, 'Done updating...')
@@ -148,7 +147,7 @@ def calc_distance():
 
     destinations = []
     for dest in d:
-        if not 'Enter Address' in dest:
+        if 'Enter Address' not in dest:
             destinations.append(dest)
         else:
             destinations.append('')
@@ -178,7 +177,7 @@ def calc_distance():
         dt.append(t1 - t0)
         t0 = t1
         est_time_left = round(sum(dt) / len(dt) * (total_count - count), 0)
-        print_text(pwin, 'Finding distane for property {0}/{1}:  Estimated time remaining = {2}s'
+        print_text(pwin, 'Finding distance for property {0}/{1}:  Estimated time remaining = {2}s'
                    .format(str(count), str(total_count), str(est_time_left)))
 
     props['dist1'] = d1
@@ -194,32 +193,36 @@ def calc_distance():
 
 def find_lakes():
     print_text(pwin, 'Updating lake percentages...')
-
-    c[combo_county.get().lower()].lakes_found = (
-        sys.modules['Utils.gis_utils.' + combo_county.get().lower()].find_lake_props(pwin, get_filename()))
-
+    c[combo_county.get().lower()].lakes_found = find_lake_props(combo_county.get().lower(), pwin, get_filename())
     update_status()
     print_text(pwin, 'Done updating...')
 
 
 def update_status():
-    c1 = c[combo_county.get().lower()]
-    stats['state'] = 'normal'
-    stats.delete("1.0","end-1c")
+    if combo_county.get().lower() in c.keys():
+        c1 = c[combo_county.get().lower()]
+        stats['state'] = 'normal'
+        stats.delete("1.0", "end-1c")
 
-    stats.insert(tk.END, 'Status \n')
-    stats.insert(tk.END, 'County: ' + combo_county.get() + '\n')
-    stats.insert(tk.END, 'Properties Exist: ' + str(c1.props_exist) + '\n')
-    stats.insert(tk.END, "Distanced Calc'd: " + str(c1.distance_calcd) + '\n')
-    stats.insert(tk.END, 'Lakes Found: ' + str(c1.lakes_found) + '\n')
-    stats.insert(tk.END, 'Last Updated: ' + c1.last_updated + '\n')
-    stats.insert(tk.END, 'Count: ' + str(c1.count) + '\n')
-    stats.insert(tk.END, '# Rated: ' + str(c1.rated) + '\n')
-    stats.insert(tk.END, '# Highly Rated: ' + str(c1.rated_high) + '\n')
-    stats.insert(tk.END, 'Original Count: ' + str(c1.orig_count) + '\n')
-    stats.insert(tk.END, 'Withdrawn Recently: ' + str(c1.withdrawn_last) + '\n')
+        stats.insert(tk.END, 'Status \n')
+        stats.insert(tk.END, 'County: ' + combo_county.get() + '\n')
+        stats.insert(tk.END, 'Properties Exist: ' + str(c1.props_exist) + '\n')
+        stats.insert(tk.END, "Distanced Calc'd: " + str(c1.distance_calcd) + '\n')
+        stats.insert(tk.END, 'Lakes Found: ' + str(c1.lakes_found) + '\n')
+        stats.insert(tk.END, 'Last Updated: ' + c1.last_updated + '\n')
+        stats.insert(tk.END, 'Count: ' + str(c1.count) + '\n')
+        stats.insert(tk.END, '# Rated: ' + str(c1.rated) + '\n')
+        stats.insert(tk.END, '# Highly Rated: ' + str(c1.rated_high) + '\n')
+        stats.insert(tk.END, 'Original Count: ' + str(c1.orig_count) + '\n')
+        stats.insert(tk.END, 'Withdrawn Recently: ' + str(c1.withdrawn_last) + '\n')
 
-    stats['state'] = 'disabled'
+        stats['state'] = 'disabled'
+        return
+    else:
+        # This loop will get his when there is no default county - typically during first time running
+        stats['state'] = 'normal'
+        stats.delete("1.0", "end-1c")
+        stats['state'] = 'disabled'
 
 
 def close_window():
@@ -233,6 +236,7 @@ def delete_data():
     set_btn_get_info_color()
 
     print_text(pwin, 'Data erased for ' + combo_county.get())
+
 
 def toggle_test():
     global test_flag
@@ -257,16 +261,16 @@ window = tk.Tk()
 window.title("Tax Sale Property Screening Tool")
 
 for i in range(4):
-    window.columnconfigure(i, weight=1) #, minsize=75)
+    window.columnconfigure(i, weight=1)  # , minsize=75)
 
 for i in range(4):
-    window.rowconfigure(i, weight=1) #, minsize=50)
+    window.rowconfigure(i, weight=1)  # , minsize=50)
 
 ########################################################
 # County Frame
 ########################################################
 frm_county = tk.Frame(master=window, relief=tk.SUNKEN, borderwidth=3)
-frm_county.grid(row=0, column=0,rowspan=2, columnspan=2, padx=5, pady=5, sticky=tk.NSEW)
+frm_county.grid(row=0, column=0, rowspan=2, columnspan=2, padx=5, pady=5, sticky=tk.NSEW)
 
 combo_county = ttk.Combobox(
     master=frm_county,
@@ -307,7 +311,7 @@ btn_show_list = tk.Button(
     command=show_gui
 )
 
-#County Frame Fill Options
+# County Frame Fill Options
 combo_county.pack(fill=tk.X, side=tk.TOP, expand=True)
 label.pack(fill=tk.X, side=tk.RIGHT, expand=True)
 btn_get_info.pack(side=tk.TOP)
@@ -351,7 +355,6 @@ btn_distance = tk.Button(
     command=calc_distance
 )
 
-
 label.grid(row=0, column=0, columnspan=3, padx=5, pady=5)
 dest1.grid(row=1, column=0, columnspan=2, padx=5, pady=5)
 dest2.grid(row=2, column=0, columnspan=2, padx=5, pady=5)
@@ -381,7 +384,7 @@ frm_print = tk.Frame(master=window, borderwidth=3)
 frm_print.grid(row=3, column=0, columnspan=3, rowspan=2, padx=5, pady=5, sticky=tk.NSEW)
 
 pwin = tk.Text(master=frm_print, height=11, wrap='none')
-ys = ttk.Scrollbar(master=frm_print, orient = 'vertical', command = pwin.yview)
+ys = ttk.Scrollbar(master=frm_print, orient='vertical', command=pwin.yview)
 pwin['yscrollcommand'] = ys.set
 
 pwin.pack(fill=tk.X, side=tk.LEFT, expand=True)
@@ -421,7 +424,7 @@ del_btn = tk.Button(
 )
 del_btn.grid(row=5, column=2, padx=5, pady=5)
 
-set_btn_get_info_color() # Initializes the default county selection
+set_btn_get_info_color()  # Initializes the default county selection
 
 test_btn = tk.Button(
     text="Test Mode",

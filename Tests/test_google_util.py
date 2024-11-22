@@ -1,4 +1,4 @@
-from Utils.google_util import run_google_api, reverse_geo, geocode, find_distance
+from Utils.google_util import run_google_api, reverse_geo, geocode, find_distance, get_streetview
 import pytest
 
 
@@ -46,3 +46,10 @@ def test_find_distance_failed():
     origin = '101 Main St Greer SC'
     destinations = ['The moon']
     assert find_distance(origin, destinations) == ['Failed', 'NaN', 'NaN']
+
+
+def test_get_streetview():
+    loc = '106 Ford Circle Greer, SC'
+    img = get_streetview(loc)
+    img.show()
+    assert 1 == 1

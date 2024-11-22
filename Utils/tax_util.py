@@ -6,6 +6,10 @@ from requests.adapters import HTTPAdapter
 from datetime import datetime, timedelta
 
 
+def get_counties():
+    return ['greenville', 'anderson', 'spartanburg']
+
+
 def get_cols():
     return ['item', 'taxmap', 'account', 'owner', 'address', 'subdiv', 'tax_dist', 'bldgs', 'acres', 'land_use',
             'bldg_type', 'bedrooms', 'sq_ft', 'dpsf', 'yr_built', 'appraised_land', 'appraised_bldg', 'appraised_total',

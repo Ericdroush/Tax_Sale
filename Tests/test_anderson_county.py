@@ -6,7 +6,7 @@ import pytest
 
 
 def test_get_gis_info_anderson():
-    tm = '690101037'
+    tm = '410502018'  # '690101037'
     params = {
         'f': 'json',
         'where': "TMS = '" + tm + "'",
@@ -24,10 +24,10 @@ def test_get_gis_info_anderson():
     wkid_test = output['spatialReference']['latestWkid'] > 0
 
     # Uncomment this section if you need bbox updates for the next test
-    import pandas as pd
-    corners = pd.DataFrame(data=output['features'][0]['geometry']['rings'][0], columns=['x', 'y'])
-    bbox = box_maker(corners)
-    print(bbox)
+    # import pandas as pd
+    # corners = pd.DataFrame(data=output['features'][0]['geometry']['rings'][0], columns=['x', 'y'])
+    # bbox = box_maker(corners)
+    # print(bbox)
 
     if response_test and col_test and corner_test and wkid_test:
         test = True

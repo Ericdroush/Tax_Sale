@@ -77,10 +77,66 @@ def find_distance(origin, destinations):
                     dist.append(round(output['rows'][0]['elements'][i]['distance']['value'] / 1609, 1))
                 except:
                     dist.append('Failed')
-                    print(output)
             else:
                 dist.append('NaN')
     else:
         dist.append('Failed')
 
     return dist
+
+
+def get_streetview(taxmap, county, loc):
+    from PIL import Image
+    import io
+
+    params = {
+        'location': loc,
+        'size': '600x400',
+        'fov': 55
+    }
+    api_name = 'streetview'
+    # output = run_google_api('streetview', params)
+    params['key'] = os.environ["GOOGLE_API_KEY"]
+    response = requests.get(googleapi + api_name + '?', params)
+
+    with open('../Counties/' + county + '/StreetView/' + taxmap + '.jpg', "wb") as file:
+        file.write(response.content)
+
+    img = Image.open(io.BytesIO(response.content))
+    img.show()
+
+    return
+
+
+def get_mapview(taxmap, county, loc):
+    from PIL import Image
+    import io
+
+    params = {
+        'center': loc,
+        'zoom': 20,
+        'size': '600x400',
+        'format': 'jpg',
+        'scale': 1,
+        'maptype': 'satellite'
+    }
+    api_name = 'staticmap'
+    # output = run_google_api('streetview', params)
+    params['key'] = os.environ["GOOGLE_API_KEY"]
+    response = requests.get(googleapi + api_name + '?', params)
+
+    with open('../Counties/' + county + '/MapView/' + taxmap + '.jpg', "wb") as file:
+        file.write(response.content)
+
+    img = Image.open(io.BytesIO(response.content))
+    img.show()
+    return
+
+def get_county_view():
+    pass
+    return
+
+
+# get_streetview('10101011','greenville', '205 Ford Circle Greer, SC')
+# get_mapview('10101010','greenville', '106 Ford Circle Greer, SC')
+

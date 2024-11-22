@@ -9,35 +9,255 @@ from bs4 import BeautifulSoup
 import pandas as pd
 from pathlib import Path
 import time
+from datetime import date
 from Utils.tax_util import *
 from Utils.google_util import *
 
 
-def obtain_props(pwin):
+def obtain_props(county, pwin):
     import io
 
     print_text(pwin, 'Retrieving tax sale properties ...')
+    if county == 'greenville':
+        req = requests.get('http://www.greenvillecounty.org/appsAS400/Taxsale/')
+        soup = BeautifulSoup(req.content, 'html.parser')
+        a = soup.find_all('table')
+        props = pd.read_html(io.StringIO(str(a)))[0]   # Item #, Map #, Name, Amount Due
+        props.columns = ['item', 'taxmap', 'owner', 'amount_due']  # Translate into standard names
 
-    req = requests.get('http://www.greenvillecounty.org/appsAS400/Taxsale/')
-    soup = BeautifulSoup(req.content, 'html.parser')
+    elif county == 'anderson':
+        cols = ['item', 'owner', 'tax_dist', 'prop_desc', 'taxmap', 'owner2', 'deedbook', 'page', 'yearsdue',
+                'amount_due', 'pct', 'blank1', 'blank2']  # Translate into standard names
+        with open('Counties/Anderson/NewspaperAd.csv') as f:
+            test_prop = f.readlines()
 
-    a = soup.find_all('table')
-    props = pd.read_html(io.StringIO(str(a)))[0]   # Item #, Map #, Name, Amount Due
-    props.columns = ['item', 'taxmap', 'owner', 'amount_due']  # Translate into standard names
+        with open('counties/Anderson/NewspaperAd_cleaned.csv', 'w') as out:
+            for line in range(len(test_prop)):
+                if test_prop[line][0].isdigit():
+                    out.write(test_prop[line])
+
+        props = pd.read_csv('Counties/Anderson/NewspaperAd_cleaned.csv', sep=',', dtype=str, names=cols)
+
+        # Remove the leading zeros and convert back to str for compatibility with later steps
+        props['taxmap'] = props['taxmap'].astype('int64')
+        props['taxmap'] = props['taxmap'].astype(str)
+
+    elif county == 'spartanburg':
+        filename = 'Counties/Spartanburg/props_from_web.csv'
+        with open(filename) as f:
+            props = f.readlines()
+
+        props[0] = 'item,taxmap,description\n'  # Set the header
+        for i in range(1, len(props)):
+            props[i] = props[i].replace(',', '')
+            if props[i][0:4].isnumeric():
+                props[i] = props[i].replace(' ', ',', 2)  # Adds a comma after the first space
+            else:
+                # Removes the carriage return from the previous line, lines will get combined at export
+                props[i - 1] = props[i - 1].rstrip()
+
+        filename = 'Counties/Spartanburg/props_clean_from_web.csv'
+        out = open(filename, 'w')
+        for line in props:
+            out.write(line)
+        out.close()
+        props = pd.read_csv(filename, sep=',', dtype=str)
+
+    else:
+        print_text(pwin, 'The county ' + county + ' has not been defined')
 
     print_text(pwin, str(len(props)) + ' tax sale properties has been retrieved...')
-
     return props
 
 
-def get_gis_info(pwin, filename, test_flag):
-    import json
+def get_props(county, tm):
+    if county == 'greenville':
+        params = {
+            'f': 'json',
+            'where': "PIN = '" + tm + "'",
+            'outFields': '*'
+        }
+        url = 'https://www.gcgis.org/arcgis/rest/services/GreenvilleJS/Map_Layers_JS/MapServer/53/query?'
+    elif county == 'anderson':
+        params = {
+            'f': 'json',
+            'where': "TMS = '" + tm + "'",
+            'outFields': '*'
+        }
+        url = 'https://propertyviewer.andersoncountysc.org/arcgis/rest/services/NewPropertyViewer/MapServer/5/query?'
+    elif county == 'spartanburg':
+        params = {
+            'f': 'json',
+            'where': "MAPNUMBER = '" + tm + "'",
+            'outFields': '*'
+        }
+        url = 'https://maps.spartanburgcounty.org/server/rest/services/OneMap/Tax_Parcels/MapServer/1/query?'
+    else:
+        return 0
+
+    response = run_query(url, params)
+    return json.loads(response.text)
+
+
+def populate_fields(county, tm, prop, props, output):
+    attr = output['features'][0]['attributes']
+    corners = pd.DataFrame(data=output['features'][0]['geometry']['rings'][0], columns=['x', 'y'])
+    wkid = output['spatialReference']['latestWkid']
+
+    lat, lon = geo_convert(corners['x'].mean(), corners['y'].mean(), wkid)
+    address = reverse_geo(lat, lon)
+    if isinstance(address, str):  # Found address, NaN show up as float
+        link_address = ('https://www.google.com/maps/place/' +
+                        address.split()[0].replace('+', '%2B') + ',+' +
+                        address.split(',')[0].split()[1].replace(' ', '+') + ',+' +
+                        address.split(',')[1].strip())
+    else:
+        link_address = 'http://maps.google.com/maps?t=k&q=loc:' + str(lat) + '+' + str(lon)
+    map_link = ('=HYPERLINK("' + link_address + '","Map")')
+
+    bbox = box_maker(corners)
+    withdrawn = 'A'
+    lake, dist1, dist2, dist3 = 'NaN', 'NaN', 'NaN', 'NaN'
+
+    if county == 'greenville':
+        account = 'NaN'
+        subdiv = attr['SUBDIV']
+        tax_dist = attr['DIST']
+        acres = attr['TACRES']
+        landuse = attr['LANDUSE']
+        # This doesn't work, always goes to 1, maybe landuse is a text?
+        if landuse == 1180 or landuse == 9171 or landuse == 6800:
+            bldgs = 0
+        else:
+            bldgs = 1
+        # 1100 Residential Single Family
+        # 1101 Residential Single Family with Auxiliary Use
+        # 1170 Residential Mobile Home with Land
+        # 1171 Residential Mobile Home on Mobile Home File
+        # 1180 Residential Vacant
+        # 1181 Homeowners Association Property
+        # 1182 Common Area
+        # 6800 Commercial Vacant
+        # 9170 Agricultural Vacant
+        # 9171 Agricultural Improved
+        # bldg_type = attr['PROPTYPE']  # Discontinued in 2024
+        bedrooms = attr['BEDROOMS']
+        sq_ft = attr['SQFEET']
+        appraised_total = attr['FAIRMKTVAL']
+        sale_price = attr['SLPRICE']
+        sale_date = from_excel_serial(attr['DEEDDATE'] / 86400 / 1000 + 25569)
+        bldg_type = 'NaN'
+        yr_built = 'NaN'
+        appraised_land = 'NaN'
+        appraised_bldg = 'NaN'
+        bldg_ratio = 'NaN'
+
+        # Calculated parameters
+        dpsf = dpsf_calc(appraised_total, sq_ft)
+
+        if acres < 0.1:  # Only overwrite if acres wasn't defined
+            acres = polygon_area(corners)
+
+        county_link = '=HYPERLINK("https://www.gcgis.org/apps/GreenvilleJS/?PIN=' + tm + '","County")'
+
+    elif county == 'anderson':
+        account = 'NaN'
+        subdiv = 'NaN'
+        tax_dist = props['tax_dist'].iloc[prop]
+        acres = attr['SHAPE.STArea()'] / 43560
+        landuse = 'NaN'
+        bldg_type = 'NaN'
+        bedrooms = 'NaN'
+        sq_ft = 'NaN'
+        appraised_total = attr['MRKT_VALUE']
+        bldgs = attr['IMPRV']
+        yr_built = 'NaN'
+        dpsf = 'NaN'  # Hard code to NaN since sq_ft not available for this county
+
+        # Call second website for additional details
+        tm2 = tm.rjust(11, '0') + props['owner2'].iloc[prop].rjust(5, '0')
+
+        params = {'mapno': tm2}
+        url = 'https://acpass.andersoncountysc.org/asrdetails.cgs?'
+        response = run_query(url, params)
+
+        soup = BeautifulSoup(response.content, 'html.parser')
+
+        sp1 = 0
+        sp2 = 0
+        # Initialize variables
+        for a in soup.find_all('td', text='Date'):
+            b = a.parent.find_next('tr').get_text()
+            if b.count('\n') > 4:  # This line has sales dat
+                sd1 = b.split('\n')[1]
+                c = b.split('\n')[4].replace('$', '').replace(',', '').strip()
+                if len(c) > 0:
+                    sp1 = float(c)
+                else:
+                    sp1 = 0
+                if sp1 < 11:  # Screen for junk sales
+                    b = a.parent.find_next('tr').find_next('tr').get_text()
+                    if b.count('\n') > 4:  # This line has sales dat
+                        sd2 = b.split('\n')[1]
+                        c = b.split('\n')[4].replace('$', '').replace(',', '').strip()
+                        if len(c) > 0:
+                            sp2 = float(c)
+                        else:
+                            sp2 = 0
+
+        if sp1 == 0 and sp2 == 0:
+            sale_price = 'NaN'
+            sale_date = 'NaN'
+        elif sp1 >= sp2:
+            sale_price = sp1
+            sale_date = sd1
+        else:
+            sale_price = sp2
+            sale_date = sd2
+
+        # Could get subdivision here if needed
+        appraised_land, appraised_bldg, asmt_total, bldg_ratio = 'NaN', 'NaN', 'NaN', 'NaN'
+        for a in soup.find_all('div', text=str(date.today().year)):
+            b = a.parent.parent.get_text()  # Year, Acre, lots, Land Asmt, #Bldg, Bldg Asmt, Tot Asmt, Rat CD, RC
+            if b.count('\n') > 4:
+                if len(b.split('\n')[4].strip()) > 0:
+                    appraised_land = b.split('\n')[4].strip()
+                else:
+                    appraised_land = 'NaN'
+                if len(b.split('\n')[6].strip()) > 0:
+                    appraised_bldg = b.split('\n')[6].strip()
+                else:
+                    appraised_bldg = 'NaN'
+                if len(b.split('\n')[7].strip()) > 0:
+                    asmt_total = b.split('\n')[7].strip()
+                else:
+                    asmt_total = 'NaN'
+                if appraised_land == 'NaN' or asmt_total == 'NaN':
+                    bldg_ratio = 'NaN'
+                else:
+                    bldg_ratio = round(int(appraised_land) / int(asmt_total), 2)
+
+        county_link = '=HYPERLINK("https://propertyviewer.andersoncountysc.org/mapsjs/?TMS=' + tm + '&disclaimer=false","County")'
+
+    elif county == 'spartanburg':
+        pass
+
+    data_list = [props['item'].iloc[prop], tm, account, props['owner'].iloc[prop], address, subdiv, tax_dist,
+                 bldgs, acres, landuse, bldg_type, bedrooms, sq_ft, dpsf, yr_built, appraised_land, appraised_bldg,
+                 appraised_total, bldg_ratio, sale_price, sale_date, lake, bbox, lat, lon, dist1, dist2, dist3,
+                 withdrawn, county_link, map_link, float(props['amount_due'].iloc[prop].strip('$').replace(',', '')),
+                 '', '', '']
+
+    return data_list
+
+
+def get_gis_info(county, pwin, filename, test_flag):
 
     # Pull list of properties from website
     if test_flag:
-        props = obtain_props(pwin).head(5)  # Limit to 5 properties for testing
+        props = obtain_props(county, pwin).head(5)  # Limit to 5 properties for testing
     else:
-        props = obtain_props(pwin)
+        props = obtain_props(county, pwin)
     total_count = len(props)
 
     cols = get_cols()
@@ -47,10 +267,11 @@ def get_gis_info(pwin, filename, test_flag):
         props_old = pd.read_csv(filename, sep=',', dtype=get_type())
     else:
         props_new.to_csv(filename, index=False)  # Write out headers
-        props_old = pd.DataFrame(columns=['taxmap'])  # Creates empty dataframe to compare to, won't find anything and will write out all taxmaps
+        # Creates empty dataframe to compare to, won't find anything and will write out all taxmaps
+        props_old = pd.DataFrame(columns=['taxmap'])
 
     prop_count = 0
-    t0 = t1 = time.perf_counter()
+    t0 = time.perf_counter()
     dt = []
     for prop in props.index:
 
@@ -60,156 +281,42 @@ def get_gis_info(pwin, filename, test_flag):
             if len(str(tm)) > 5:  # Check for valid TaxMap ID
                 # print(tm)
 
-                # Query property details
-                # tm = '0687080101100'
-                params = {
-                    'f': 'json',
-                    'where': "PIN = '" + tm + "'",
-                    'outFields': '*'
-                }
-                # url = 'https://www.gcgis.org/arcgis/rest/services/GreenvilleJS/Map_Layers_JS/MapServer/53/query?f=json&where=PIN%20%3D%20%27'
-                # url = url + tm + '%27&returnGeometry=true&spatialRel=esriSpatialRelIntersects&maxAllowableOffset=4&geometryPrecision=0&outFields=*&outSR=6570'
+                output = get_props(county, tm)
 
-                url = 'https://www.gcgis.org/arcgis/rest/services/GreenvilleJS/Map_Layers_JS/MapServer/53/query?'
-
-                response = run_query(url, params)
-                output = json.loads(response.text)
-
-                # "PIN": "PIN / Tax Map #",
-                # "OWNAM1": "Owner Name(MixedCase)",
-                # "OWNAM2": "Owner Name 2(MixedCase)",
-                # "STREET": "Mailing Address(MixedCase)",
-                # "CITY": "City(MixedCase)",
-                # "STATE": "State",
-                # "ZIP5": "Zip Code",
-                # "NAMECO": "In Care Of(MixedCase)",
-                # "POWNNM": "Previous Owner(MixedCase)",
-                # "DEEDDATE": "Deed Date(ShortDate)",
-                # "CUBOOK": "Deed Book",
-                # "CUPAGE": "Deed Page",
-                # "PLTBK1": "Plat Book",
-                # "PPAGE1": "Plat Page",
-                # "DIST": "Tax District",
-                # "MKTAREA": "Market Area",
-                # "JURIS": "Jurisdiction",
-                # "LANDUSE": "Land Use",
-                # "DESCR": "Legal Description",
-                # "SUBDIV": "Subdivision(MixedCase)",
-                # "STRNUM": "Site Address Number",
-                # "LOCATE": "Site Address Street",
-                # "SLPRICE": "Sale Price(Money)",
-                # "FAIRMKTVAL": "Fair Market Value(Money)",
-                # "TAXMKTVAL": "Taxable Market Value(Money)",
-                # "TOTTAX": "Taxes(Money)",
-                # "PAIDDATE": "Date Taxes Paid(ShortDate)",
-                # "TACRES": "Estimated Acres",
-                # "SQFEET": "Square Feet",
-                # "BEDROOMS": "Number of Bedrooms",
-                # "BATHRMS": "Number of Bathrooms",
-                # "HALFBATH": "Number of Half Baths",
-                # "PROPTYPE": "99! PROPTYPE",
-                # "IMPROVED": "99! IMPROVED",
-                # "OBJECTID": "OBJECTID"
-                # print(output['features'][0]['attributes']['PIN'])
-                # print(output['features'][0]['attributes'].items())
-                # print(output['features'][0]['geometry']['rings'][0])
+                prop_count += 1
+                t1 = time.perf_counter()
+                dt.append(t1 - t0)
+                t0 = t1
+                est_time_left = sum(dt) / len(dt) * (total_count - prop_count)
+                print_text(pwin, '{0}/{1}  Tax map ID: {2} Estimated time remaining = {3}s'
+                           .format(str(prop_count), str(total_count), str(tm), int(est_time_left)))
 
                 if len(output['features']) == 0:  # Didn't get something back from the website
                     pass
-                    # props_new.loc[0] = 'NaN'  # Fill with NaN
-                    # props_new['item'].loc[0] = props['item'].iloc[prop]
-                    # props_new['taxmap'].loc[0] = tm
-                    # props_new.to_csv(filename, mode='a', index=False, header=False)
+                    props_new.loc[0] = 'NaN'  # Fill with NaN
+                    props_new['item'].loc[0] = props['item'].iloc[prop]
+                    props_new['taxmap'].loc[0] = tm
+                    props_new['owner'].loc[0] = props['owner'].iloc[prop]
+                    props_new.to_csv(filename, mode='a', index=False, header=False)
 
                 else:
-                    prop_count += 1
-                    t1 = time.perf_counter()
-                    dt.append(t1 - t0)
-                    t0 = t1
-                    est_time_left = round(sum(dt)/len(dt) * (total_count - prop_count),0)
-                    print_text(pwin, '{0}/{1}  Tax map ID: {2} Estimated time remaining = {3}s'.format(str(prop_count),
-                                                                                                       str(total_count),
-                                                                                                       str(tm),
-                                                                                                       str(est_time_left)))
-                    attr = output['features'][0]['attributes']
-                    # print(attr)
-                    # Direct read parameters
-                    # address = attr['STREET'] + attr['CITY'] + ', ' + attr['STATE'] #Not reliable
-                    account = 'NaN'
-                    subdiv = attr['SUBDIV']
-                    tax_dist = attr['DIST']
-                    # if attr['IMPROVED'] == 'no':
-                    #     bldgs = 0
-                    # else:
-                    #     bldgs = 1
-                    acres = attr['TACRES']
-                    landuse = attr['LANDUSE']
-                    if landuse == 1180 or landuse == 9171 or landuse == 6800:  #This doesn't work, always goes to 1, maybe landuse is a text?
-                        bldgs = 0
-                    else:
-                        bldgs = 1
-                    # 1100 Residential Single Family
-                    # 1101 Residential Single Family with Auxiliary Use
-                    # 1170 Residential Mobile Home with Land
-                    # 1171 Residential Mobile Home on Mobile Home File
-                    # 1180 Residential Vacant
-                    # 1181 Homeowners Association Property
-                    # 1182 Common Area
-                    # 6800 Commercial Vacant
-                    # 9170 Agricultural Vacant
-                    # 9171 Agricultural Improved
-                    # bldg_type = attr['PROPTYPE']  # Discontinued in 2024
-                    bedrooms = attr['BEDROOMS']
-                    sq_ft = attr['SQFEET']
-                    appraised_total = attr['FAIRMKTVAL']
-                    sale_price = attr['SLPRICE']
-                    sale_date = from_excel_serial(attr['DEEDDATE'] / 86400 / 1000 + 25569)
-
-                    # Calculated parameters
-                    dpsf = dpsf_calc(appraised_total, sq_ft)
-
-                    corners = pd.DataFrame(data=output['features'][0]['geometry']['rings'][0], columns=['x', 'y'])
-                    if acres < 0.1:   # Only overwrite if acres wasn't defined
-                        acres = polygon_area(corners)
-
-                    wkid = output['spatialReference']['latestWkid']
-                    lat, lon = geo_convert(corners['x'].mean(), corners['y'].mean(), wkid)
-                    address = reverse_geo(lat, lon)
-
-                    bbox = box_maker(corners)
-
-                    withdrawn = 'A'
-
-                    county_link = '=HYPERLINK("https://www.gcgis.org/apps/GreenvilleJS/?PIN=' + tm + '","County")'
-                    map_link = ('=HYPERLINK("http://maps.google.com/maps?t=k&q=loc:'
-                                + str(lat) + '+' + str(lon) + '","Map")')
-
-                    # 'item',             'taxmap', 'account', 'owner',                 'address', 'subdiv',
-                    # 'tax_dist', 'bldgs', 'acres', 'land_use','bldg_type', 'bedrooms', 'sq_ft', 'dpsf', 'yr_built','appraised_land', 'appraised_bldg'
-                    # 'appraised_total', 'bldg_ratio', 'sale_price', 'sale_date', 'lake%', 'bbox', 'lat', 'lon', 'dist1', 'dist2',
-                    # 'dist3', 'withdrawn', 'county_link', 'map_link',
-                    # 'amount_due', 'comments', 'rating', 'bid'
-                    data_list = [props['item'].iloc[prop], tm, account, props['owner'].iloc[prop], address, subdiv,
-                                 tax_dist, bldgs, acres, landuse, 'NaN', bedrooms, sq_ft, dpsf, 'NaN', 'NaN', 'NaN',
-                                 appraised_total, 'NaN', sale_price, sale_date, 'NaN', bbox, lat, lon, 'NaN', 'NaN',
-                                 'NaN', withdrawn, county_link, map_link,
-                                 float(props['amount_due'].iloc[prop].strip('$').replace(',','')), '', '', '']
-
+                    data_list = populate_fields(county, tm, prop, props, output)
                     props_new.loc[0] = data_list
                     props_new.to_csv(filename, mode='a', index=False, header=False)
+
         else:  # if tm is already found... occurs when you need to restart
             prop_count += 1
 
     return prop_count
 
 
-def update_withdrawn(pwin, filename, test_flag):
+def update_withdrawn(county, pwin, filename, test_flag):
 
     # Pull list of properties from website
     if test_flag:
-        props = obtain_props(pwin).head(3)  # Limit to 5 properties for testing
+        props = obtain_props(county, pwin).head(3)  # Limit to 5 properties for testing
     else:
-        props = obtain_props(pwin)
+        props = obtain_props(county, pwin)
 
     if Path(filename).is_file():
         props_main = pd.read_csv(filename, sep=',', dtype=get_type())
@@ -230,7 +337,31 @@ def update_withdrawn(pwin, filename, test_flag):
     return new_count, withdrawn_count
 
 
-def find_lake_props(pwin, filename):
+def lake_url(county, bbox):
+    if county == 'greenville':
+        url = ('https://www.gcgis.org/arcgis/rest/services/GreenvilleJS/Map_Layers_JS/MapServer/export?dpi=96'
+               '&transparent=true&format=png8&layers=show%3A53%2C49%2C48&bbox=')
+        url = url + bbox
+        return url + '&bboxSR=6570&imageSR=6570&size=937%2C955&f=image'
+    elif county == 'anderson':
+        url = ('https://propertyviewer.andersoncountysc.org/arcgis/rest/services/Overlays/MapServer/export?dpi=96'
+               '&transparent=true&format=png8&layers=show%3A1&bbox=')
+        url = url + bbox
+        return url + '&bboxSR=102733&imageSR=102733&size=759%2C885&f=image'
+    elif county == 'spartanburg':
+        return 0  # Not set up for spartanburg yet
+
+
+def set_lake_params(county):
+    if county == 'greenville':
+        return 0, 'inv'
+    elif county == 'anderson':
+        return 1, 'norm'
+    elif county == 'spartanburg':
+        return 0, 'inv'  # Hasn't been established yet, just placeholder values
+
+
+def find_lake_props(county, pwin, filename):
     from urllib.request import urlopen
     from PIL import Image
 
@@ -254,15 +385,24 @@ def find_lake_props(pwin, filename):
     if Path(filename).is_file():
         props = pd.read_csv(filename, sep=',', dtype=get_type())
 
-        for index, row in props.iterrows():
-            if row['bbox'] == 'NaN':
-                row['lake%'] = 'NaN'
-            else:
-                url = ('https://www.gcgis.org/arcgis/rest/services/GreenvilleJS/Map_Layers_JS/MapServer/export?dpi=96'
-                       '&transparent=true&format=png8&layers=show%3A53%2C49%2C48&bbox=')
-                url = url + row['bbox']
-                url = url + '&bboxSR=6570&imageSR=6570&size=937%2C955&f=image'
+        lake_val = []
+        t0 = time.perf_counter()
+        dt = []
+        count = 0
+        total_count = len(props)
+        for index, bbox in props['bbox'].items():
+            count += 1
+            t1 = time.perf_counter()
+            dt.append(t1 - t0)
+            t0 = t1
+            est_time_left = sum(dt) / len(dt) * (total_count - count)
+            print_text(pwin, 'Finding lake percentages for property {0}/{1}: Estimated time remaining = {2}s'
+                       .format(str(count), str(total_count), int(est_time_left)))
 
+            if isinstance(bbox, float):  # NaN will be a float, expecting a string
+                lake_val.append('NaN')
+            else:
+                url = lake_url(county, bbox)
                 img = Image.open(urlopen(url))
                 pixel_count = img.size[0] * img.size[1]
                 img_list = list(img.getdata())
@@ -272,12 +412,14 @@ def find_lake_props(pwin, filename):
                 # img.show()
                 # print([img_list.count(x) for x in range(max(img_list))])
 
-                lake_pixel = 0
+                lake_pixel, lake_calc = set_lake_params(county)
                 lake_count = img_list.count(lake_pixel)
-                lake_pct = (1 - lake_count / pixel_count) * 100
+                if lake_calc == 'norm':
+                    lake_val.append((lake_count / pixel_count) * 100)
+                elif lake_calc == 'inv':
+                    lake_val.append((1 - lake_count / pixel_count) * 100)
 
-                row['lake%'] = lake_pct
-
+        props['lake%'] = lake_val
         props.to_csv(filename, index=False, na_rep='NaN')
 
         return True
