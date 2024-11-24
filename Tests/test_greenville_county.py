@@ -3,6 +3,13 @@ import json
 from urllib.request import urlopen
 from PIL import Image
 import pytest
+import requests
+from requests.exceptions import ConnectionError
+
+
+def test_import_props_greenville():
+    req = requests.get('https://www.greenvillecounty.org/appsAS400/Taxsale/')
+    assert req.status_code == 200
 
 
 def test_get_gis_info_greenville():

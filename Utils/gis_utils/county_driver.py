@@ -19,7 +19,7 @@ def obtain_props(county, pwin):
 
     print_text(pwin, 'Retrieving tax sale properties ...')
     if county == 'greenville':
-        req = requests.get('http://www.greenvillecounty.org/appsAS400/Taxsale/')
+        req = requests.get('https://www.greenvillecounty.org/appsAS400/Taxsale/')
         soup = BeautifulSoup(req.content, 'html.parser')
         a = soup.find_all('table')
         props = pd.read_html(io.StringIO(str(a)))[0]   # Item #, Map #, Name, Amount Due
