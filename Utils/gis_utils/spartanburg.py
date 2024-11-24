@@ -276,7 +276,6 @@ def get_gis_info(pwin, filename, test_flag):
 
                     county_link = '=HYPERLINK("https://propertyviewer.andersoncountysc.org/mapsjs/?TMS=' + tm + '&disclaimer=false","County")'
                     map_link = '=HYPERLINK("http://maps.google.com/maps?t=k&q=loc:' + str(lat) + '+' + str(lon) + '","Map")'
-                    #map_link = 'http://maps.google.com/maps?t=k&q=loc:' + str(lat) + '+' + str(lon)
 
                     #            'item',             'taxmap', 'account', 'owner',                    'address', 'subdiv', 'tax_dist',
                     #            'bldgs', 'acres', 'land_use','bldg_type', 'bedrooms', 'sq_ft', 'dpsf', 'yr_built','appraised_land', 'appraised_bldg', 'appraised_total',
