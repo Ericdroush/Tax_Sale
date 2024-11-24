@@ -417,10 +417,6 @@ test_btn = tk.Button(
 test_flag = False
 test_btn.grid(row=5, column=3, padx=5, pady=5)
 
-#################################################################
-#   Events Section
-#   https://web.archive.org/web/20190512164300/http://infohost.nmt.edu/tcc/help/pubs/tkinter/web/event-types.html
-#################################################################
 
 
 window.mainloop()
