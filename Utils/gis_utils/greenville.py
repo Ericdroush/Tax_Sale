@@ -5,19 +5,16 @@ Created on Wed Sep 21 19:44:27 2022
 @author: ericd
 """
 
-import requests
-from urllib3.util import Retry
-from requests.adapters import HTTPAdapter
 from bs4 import BeautifulSoup
 import pandas as pd
 from pathlib import Path
-import sys
 import time
+from Utils.tax_util import *
+from Utils.google_util import *
 
 # adding utils to the system path
-sys.path.insert(0, 'C:/Users/ericd/OneDrive/Documents/Python Scripts/Tax_Sale/Utils')
-from tax_util import *
-from google_util import *
+# sys.path.insert(0, 'C:/Users/ericd/OneDrive/Documents/Python Scripts/Tax_Sale/Utils')
+
 
 def obtain_props(pwin):
     import io
@@ -64,10 +61,10 @@ def get_gis_info(pwin, filename, test_flag):
         if not (props_old['taxmap'].eq(tm)).any():
 
             if len(str(tm)) > 5:  # Check for valid TaxMap ID
-                #print(tm)
+                # print(tm)
 
                 # Query property details
-                #tm = '0687080101100'
+                # tm = '0687080101100'
                 params = {
                     'f': 'json',
                     'where': "PIN = '" + tm + "'",
@@ -140,7 +137,7 @@ def get_gis_info(pwin, filename, test_flag):
                     attr = output['features'][0]['attributes']
                     # print(attr)
                     # Direct read parameters
-                    #address = attr['STREET'] + attr['CITY'] + ', ' + attr['STATE'] #Not reliable
+                    # address = attr['STREET'] + attr['CITY'] + ', ' + attr['STATE'] #Not reliable
                     account = 'NaN'
                     subdiv = attr['SUBDIV']
                     tax_dist = attr['DIST']
@@ -164,7 +161,7 @@ def get_gis_info(pwin, filename, test_flag):
                     # 6800 Commercial Vacant
                     # 9170 Agricultural Vacant
                     # 9171 Agricultural Improved
-                    bldg_type = attr['PROPTYPE']
+                    # bldg_type = attr['PROPTYPE']  # Discontinued in 2024
                     bedrooms = attr['BEDROOMS']
                     sq_ft = attr['SQFEET']
                     appraised_total = attr['FAIRMKTVAL']
@@ -179,25 +176,27 @@ def get_gis_info(pwin, filename, test_flag):
                         acres = polygon_area(corners)
 
                     wkid = output['spatialReference']['latestWkid']
-
                     lat, lon = geo_convert(corners['x'].mean(), corners['y'].mean(), wkid)
+                    address = reverse_geo(lat, lon)
 
-                    address = reversegeo(lat, lon)
+                    bbox = box_maker(corners)
 
-                    bbox = str(corners['x'].min()) + '%2C' + str(corners['y'].min())  + '%2C' + str(corners['x'].max())  + '%2C' + str(corners['y'].max())
                     withdrawn = 'A'
 
                     county_link = '=HYPERLINK("https://www.gcgis.org/apps/GreenvilleJS/?PIN=' + tm + '","County")'
-                    map_link = '=HYPERLINK("http://maps.google.com/maps?t=k&q=loc:' + str(lat) + '+' + str(lon) + '","Map")'
+                    map_link = ('=HYPERLINK("http://maps.google.com/maps?t=k&q=loc:'
+                                + str(lat) + '+' + str(lon) + '","Map")')
 
-                    #            'item',             'taxmap', 'account', 'owner',                    'address', 'subdiv', 'tax_dist',
-                    #            'bldgs', 'acres', 'land_use','bldg_type', 'bedrooms', 'sq_ft', 'dpsf', 'yr_built','appraised_land', 'appraised_bldg', 'appraised_total',
-                    #             'bldg_ratio', 'sale_price', 'sale_date', 'lake%', 'bbox', 'lat', 'lon', 'dist1', 'dist2', 'dist3', 'withdrawn', 'county_link', 'map_link',
-                    #            'amount_due', 'comments', 'rating', 'bid'
-                    data_list = [props['item'].iloc[prop], tm, account, props['owner'].iloc[prop], address, subdiv, tax_dist,
-                             bldgs, acres, landuse, bldg_type, bedrooms, sq_ft, dpsf, 'NaN', 'NaN', 'NaN', appraised_total,
-                             'NaN', sale_price, sale_date, 'NaN', bbox, lat, lon, 'NaN', 'NaN', 'NaN', withdrawn, county_link, map_link,
-                             float(props['amount_due'].iloc[prop].strip('$').replace(',','')), '', '', '']
+                    # 'item',             'taxmap', 'account', 'owner',                 'address', 'subdiv',
+                    # 'tax_dist', 'bldgs', 'acres', 'land_use','bldg_type', 'bedrooms', 'sq_ft', 'dpsf', 'yr_built','appraised_land', 'appraised_bldg'
+                    # 'appraised_total', 'bldg_ratio', 'sale_price', 'sale_date', 'lake%', 'bbox', 'lat', 'lon', 'dist1', 'dist2',
+                    # 'dist3', 'withdrawn', 'county_link', 'map_link',
+                    # 'amount_due', 'comments', 'rating', 'bid'
+                    data_list = [props['item'].iloc[prop], tm, account, props['owner'].iloc[prop], address, subdiv,
+                                 tax_dist, bldgs, acres, landuse, 'NaN', bedrooms, sq_ft, dpsf, 'NaN', 'NaN', 'NaN',
+                                 appraised_total, 'NaN', sale_price, sale_date, 'NaN', bbox, lat, lon, 'NaN', 'NaN',
+                                 'NaN', withdrawn, county_link, map_link,
+                                 float(props['amount_due'].iloc[prop].strip('$').replace(',','')), '', '', '']
 
                     props_new.loc[0] = data_list
                     props_new.to_csv(filename, mode='a', index=False, header=False)
@@ -233,6 +232,7 @@ def update_withdrawn(pwin, filename, test_flag):
 
     return new_count, withdrawn_count
 
+
 def find_lake_props(pwin, filename):
     from urllib.request import urlopen
     from PIL import Image
@@ -254,7 +254,6 @@ def find_lake_props(pwin, filename):
     #Eric's hand built test
     #url.append('https://www.gcgis.org/arcgis/rest/services/GreenvilleJS/Map_Layers_JS/MapServer/export?dpi=96&transparent=true&format=png8&layers=show%3A53%2C49%2C48&bbox=1607391%2C1154442%2C1608391%2C1155442&bboxSR=6570&imageSR=6570&size=937%2C955&f=image')
 
-
     if Path(filename).is_file():
         props = pd.read_csv(filename, sep=',', dtype=get_type())
 
@@ -262,7 +261,8 @@ def find_lake_props(pwin, filename):
             if row['bbox'] == 'NaN':
                 row['lake%'] = 'NaN'
             else:
-                url = 'https://www.gcgis.org/arcgis/rest/services/GreenvilleJS/Map_Layers_JS/MapServer/export?dpi=96&transparent=true&format=png8&layers=show%3A53%2C49%2C48&bbox='
+                url = ('https://www.gcgis.org/arcgis/rest/services/GreenvilleJS/Map_Layers_JS/MapServer/export?dpi=96'
+                       '&transparent=true&format=png8&layers=show%3A53%2C49%2C48&bbox=')
                 url = url + row['bbox']
                 url = url + '&bboxSR=6570&imageSR=6570&size=937%2C955&f=image'
 
@@ -270,10 +270,10 @@ def find_lake_props(pwin, filename):
                 pixel_count = img.size[0] * img.size[1]
                 img_list = list(img.getdata())
                 # These statements can help dig into the details of the image to figure out how lakes are ID'd
-                #print(img.mode, img.size, img.info, img.getbands())
-                #img2 = img.convert('RGB')
-                #img.show()
-                #print([img_list.count(x) for x in range(max(img_list))])
+                # print(img.mode, img.size, img.info, img.getbands())
+                # img2 = img.convert('RGB')
+                # img.show()
+                # print([img_list.count(x) for x in range(max(img_list))])
 
                 lake_pixel = 0
                 lake_count = img_list.count(lake_pixel)
