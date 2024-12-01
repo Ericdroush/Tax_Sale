@@ -60,7 +60,7 @@ def get_type():
 
 def geo_convert(lat, lon, wkid):
     from pyproj import Transformer
-    #EPSG:4326 is equivalent to WGS84 which gives standard lat/lon
+    # EPSG:4326 is equivalent to WGS84 which gives standard lat/lon
     if wkid < 100000:
         transformer = Transformer.from_crs('EPSG:' + str(wkid), 'EPSG:4326')
     else:
@@ -73,9 +73,9 @@ def meters_to_latlon(mx, my):
     # Not currently used
     import math
     "Converts XY point from Spherical Mercator EPSG:900913 to lat/lon in WGS84 Datum"
-    originShift = 2 * math.pi * 6378137 / 2.0
-    lon = (mx / originShift) * 180.0
-    lat = (my / originShift) * 180.0
+    origin_shift = 2 * math.pi * 6378137 / 2.0
+    lon = (mx / origin_shift) * 180.0
+    lat = (my / origin_shift) * 180.0
 
     lat = 180 / math.pi * (2 * math.atan( math.exp( lat * math.pi / 180.0)) - math.pi / 2.0)
     return lat, lon
@@ -94,7 +94,7 @@ def from_excel_serial(ordinal: float, _epoch0=datetime(1899, 12, 31)) -> datetim
     return (_epoch0 + timedelta(days=ordinal)).replace(microsecond=0).strftime('%m/%d/%Y')
 
 
-def print_text(obj1, inp):
+def print_text2(obj1, inp):
     import tkinter as tk
 
     obj1['state'] = 'normal'

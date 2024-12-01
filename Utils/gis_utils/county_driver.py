@@ -14,10 +14,10 @@ from Utils.tax_util import *
 from Utils.google_util import *
 
 
-def obtain_props(county, pwin):
+def obtain_props(self, county):
     import io
 
-    print_text(pwin, 'Retrieving tax sale properties ...')
+    self.print_text('Retrieving tax sale properties ...')
     if county == 'greenville':
         req = requests.get('https://www.greenvillecounty.org/appsAS400/Taxsale/')
         soup = BeautifulSoup(req.content, 'html.parser')
@@ -64,9 +64,9 @@ def obtain_props(county, pwin):
         props = pd.read_csv(filename, sep=',', dtype=str)
 
     else:
-        print_text(pwin, 'The county ' + county + ' has not been defined')
+        self.print_text('The county ' + county + ' has not been defined')
 
-    print_text(pwin, str(len(props)) + ' tax sale properties has been retrieved...')
+    self.print_text(str(len(props)) + ' tax sale properties has been retrieved...')
     return props
 
 
@@ -251,13 +251,13 @@ def populate_fields(county, tm, prop, props, output):
     return data_list
 
 
-def get_gis_info(county, pwin, filename, test_flag):
+def get_gis_info(self, county, filename, test_flag):
 
     # Pull list of properties from website
     if test_flag:
-        props = obtain_props(county, pwin).head(5)  # Limit to 5 properties for testing
+        props = obtain_props(self, county).head(5)  # Limit to 5 properties for testing
     else:
-        props = obtain_props(county, pwin)
+        props = obtain_props(self, county)
     total_count = len(props)
 
     cols = get_cols()
@@ -288,7 +288,7 @@ def get_gis_info(county, pwin, filename, test_flag):
                 dt.append(t1 - t0)
                 t0 = t1
                 est_time_left = sum(dt) / len(dt) * (total_count - prop_count)
-                print_text(pwin, '{0}/{1}  Tax map ID: {2} Estimated time remaining = {3}s'
+                self.print_text('{0}/{1}  Tax map ID: {2} Estimated time remaining = {3}s'
                            .format(str(prop_count), str(total_count), str(tm), int(est_time_left)))
 
                 if len(output['features']) == 0:  # Didn't get something back from the website
@@ -310,13 +310,13 @@ def get_gis_info(county, pwin, filename, test_flag):
     return prop_count
 
 
-def update_withdrawn(county, pwin, filename, test_flag):
+def update_withdrawn(self, county, filename, test_flag):
 
     # Pull list of properties from website
     if test_flag:
-        props = obtain_props(county, pwin).head(3)  # Limit to 5 properties for testing
+        props = obtain_props(self, county).head(3)  # Limit to 5 properties for testing
     else:
-        props = obtain_props(county, pwin)
+        props = obtain_props(self, county)
 
     if Path(filename).is_file():
         props_main = pd.read_csv(filename, sep=',', dtype=get_type())
@@ -332,7 +332,7 @@ def update_withdrawn(county, pwin, filename, test_flag):
     else:
         withdrawn_count = 0
         new_count = 0
-        print_text(pwin, 'Opps!  You need to read properties first!')
+        self.print_text('Opps!  You need to read properties first!')
 
     return new_count, withdrawn_count
 
@@ -361,7 +361,7 @@ def set_lake_params(county):
         return 0, 'inv'  # Hasn't been established yet, just placeholder values
 
 
-def find_lake_props(county, pwin, filename):
+def find_lake_props(self, county, filename):
     from urllib.request import urlopen
     from PIL import Image
 
@@ -396,7 +396,7 @@ def find_lake_props(county, pwin, filename):
             dt.append(t1 - t0)
             t0 = t1
             est_time_left = sum(dt) / len(dt) * (total_count - count)
-            print_text(pwin, 'Finding lake percentages for property {0}/{1}: Estimated time remaining = {2}s'
+            self.print_text('Finding lake percentages for property {0}/{1}: Estimated time remaining = {2}s'
                        .format(str(count), str(total_count), int(est_time_left)))
 
             if isinstance(bbox, float):  # NaN will be a float, expecting a string
@@ -425,7 +425,7 @@ def find_lake_props(county, pwin, filename):
         return True
 
     else:
-        print_text(pwin, "Properties haven't been found yet, need to do that before finding lake properties")
+        self.print_text("Properties haven't been found yet, need to do that before finding lake properties")
         return False
 
 
