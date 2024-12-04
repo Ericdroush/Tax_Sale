@@ -29,24 +29,70 @@ from Utils.County_Class import CountyClass
 from Utils.google_util import find_distance
 from Utils.tax_util import *
 from Utils.gis_utils.county_driver import *
-from PyQt6 import QtWidgets
-from PyQt6.QtWidgets import QApplication
-from qt_ui import Ui_MainWindow
+from PyQt6 import QtWidgets, QtCore
+from PyQt6.QtCore import Qt, QAbstractTableModel
+from PyQt6.QtWidgets import QApplication, QMainWindow, QStatusBar, QDialog, QTableView, QVBoxLayout
+from qt_ui import Ui_QMainWindow
+from list_dlg import Ui_List_Dialog
 
 
-class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
-    def __init__(self, *args, obj=None, **kwargs):
+class PandasModel(QAbstractTableModel):
+    def __init__(self, data):
+        super().__init__()
+        self._data = data
+
+    def rowCount(self, parent=None):
+        return self._data.shape[0]
+
+    def columnCount(self, parent=None):
+        return self._data.shape[1]
+
+    def data(self, index, role=Qt.ItemDataRole.DisplayRole):
+        if index.isValid():
+            if role == Qt.ItemDataRole.DisplayRole:
+                return str(self._data.iloc[index.row(), index.column()])
+        return None
+
+    def headerData(self, section, orientation, role=Qt.ItemDataRole.DisplayRole):
+        if role == Qt.ItemDataRole.DisplayRole:
+            if orientation == Qt.Orientation.Horizontal:
+                return str(self._data.columns[section])
+            else:
+                return str(self._data.index[section])
+        return None
+
+
+class CustomDialog(QDialog, Ui_List_Dialog):
+    def __init__(self, county, props, parent=None, *args, **kwargs):
+        super().__init__(parent, *args, **kwargs)
+        self.setupUi(self)
+
+        print(len(props))
+        print(county)
+        # self.pushButton_Close.clicked.connect(close())
+
+        table_view = QTableView()
+        model = PandasModel(props)
+        table_view.setModel(model)
+
+        layout = QVBoxLayout()
+        layout.addWidget(table_view)
+        self.setLayout(layout)
+
+
+class MainWindow(QMainWindow, Ui_QMainWindow):
+    def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.setupUi(self)
 
         # Set County Combobox entries
         self.combo_county.addItems(county.title() for county in counties_list)
-        self.combo_county.currentIndexChanged.connect(self.set_btn_get_info_color)
-        self.combo_county.currentIndexChanged.connect(self.set_address_fields)
+        self.combo_county.currentTextChanged.connect(self.set_btn_get_info_color)
+        self.combo_county.currentTextChanged.connect(self.set_address_fields)
         self.combo_county.setCurrentText(default_county)
 
         # Button mapping
-        self.pushButton_dones.clicked.connect(self.close_window)
+        self.pushButton_done.clicked.connect(self.close_window)
         self.pushButton_getinfo.clicked.connect(self.main_get_property_info)
         self.pushButton_update_list.clicked.connect(self.main_update_withdrawn)
         self.pushButton_Show_List.clicked.connect(self.show_gui)
@@ -54,23 +100,86 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.pushButton_lakes.clicked.connect(self.find_lakes)
         self.pushButton_delete.clicked.connect(self.delete_data)
 
-    def set_btn_get_info_color(self, index):
-        # TODO: This doesn't work on initialization - only works when toggling
+        # Call these to properly initialize the form - they won't get called if the default county is the first county
+        # in the list as it won't trigger the "changed" signals
+        self.set_btn_get_info_color(self.combo_county.currentText())
+        self.set_address_fields(self.combo_county.currentText())
+
+        status_bar = QStatusBar()
+        self.setStatusBar(status_bar)
+        status_bar.showMessage('Welcome to the Tax Sale Data Collector')
+        self.progressBar = QtWidgets.QProgressBar()
+        status_bar.addPermanentWidget(self.progressBar)
+        self.progressBar.hide()
+
+    def set_btn_get_info_color(self, text):
+        # Could use text instead of get_filename, but for consistency keeping the function
         if os.path.isfile(self.get_filename()):
-            self.pushButton_getinfo.setStyleSheet('background-color: green;')
+            self.pushButton_getinfo.setStyleSheet('background-color: green; ')
         else:
             self.pushButton_getinfo.setStyleSheet('')
         self.update_status()
+        # QApplication.processEvents()
 
-    def set_address_fields(self):
+    def set_address_fields(self, text):
+        text = text.lower()
+        self.lineEdit_address1.setText(c[text].addr1)
+        self.lineEdit_address2.setText(c[text].addr2)
+        self.lineEdit_address3.setText(c[text].addr3)
+        # QApplication.processEvents()
+
+    def update_status(self):
         current_county = self.combo_county.currentText().lower()
-        if current_county != '':
-            if len(c[current_county].addr1) > 0:
-                self.lineEdit_address1.setText(c[current_county].addr1)
-            if len(c[current_county].addr2) > 0:
-                self.lineEdit_address1.setText(c[current_county].addr2)
-            if len(c[current_county].addr3) > 0:
-                self.lineEdit_address1.setText(c[current_county].addr3)
+        self.textBrowser_status.setPlaceholderText('')
+        if current_county in c.keys():
+            c1 = c[current_county]
+            status = ('Status \n' +
+                      'County: ' + current_county.title() + '\n' +
+                      'Properties Exist: ' + str(c1.props_exist) + '\n' +
+                      "Distanced Calc'd: " + str(c1.distance_calcd) + '\n' +
+                      'Lakes Found: ' + str(c1.lakes_found) + '\n' +
+                      'Last Updated: ' + c1.last_updated + '\n' +
+                      'Count: ' + str(c1.count) + '\n' +
+                      '# Rated: ' + str(c1.rated) + '\n' +
+                      '# Highly Rated: ' + str(c1.rated_high) + '\n' +
+                      'Original Count: ' + str(c1.orig_count) + '\n' +
+                      'Withdrawn Recently: ' + str(c1.withdrawn_last) + '\n')
+
+            self.textBrowser_status.setPlainText(status)
+
+        else:
+            # This loop will get his when there is no default county - typically during first time running
+            self.textBrowser_status.setPlainText('')
+
+        # QApplication.processEvents()
+        return
+
+    def update_progress(self):
+        max_num = 1000000
+        self.progressBar.show()
+        self.progressBar.setRange(0, max_num)
+        for i in range(max_num):
+            i = i * 100 / 100 + 100 - 100
+            self.progressBar.setValue(int(i))
+        self.progressBar.hide()
+        return
+
+    def show_gui(self):
+        self.print_text('Starting gui...')
+        props = self.read_props()
+        county = self.combo_county.currentText()
+        dlg = CustomDialog(county, props)
+        dlg.exec()
+
+    def show_gui_old(self):
+        props = self.read_props()
+        self.print_text('Starting gui...')
+        gui = show(props)
+        # , settings={'theme':'dark'}
+        # Code pauses while the gui is open
+        props_new = gui['props']
+        self.count_rated(props_new)
+        props_new.to_csv(self.get_filename(), index=False, na_rep='NaN')
 
     def close_window(self):
         self.write_init_file()
@@ -97,16 +206,6 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.count_rated(df)
         self.print_text('Properties have been read in for ' + self.combo_county.currentText() + ' County')
         return df
-
-    def show_gui(self):
-        props = self.read_props()
-        self.print_text('Starting gui...')
-        gui = show(props)
-        # , settings={'theme':'dark'}
-        # Code pauses while the gui is open
-        props_new = gui['props']
-        self.count_rated(props_new)
-        props_new.to_csv(self.get_filename(), index=False, na_rep='NaN')
 
     def main_get_property_info(self):
         self.print_text('Retrieving property GIS information...')
@@ -183,31 +282,6 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.update_status()
         self.print_text('Done updating...')
 
-    def update_status(self):
-        current_county = self.combo_county.currentText().lower()
-        self.textBrowser_print.setPlaceholderText('test')
-        self.textBrowser_status.setPlaceholderText('')
-        if current_county in c.keys():
-            c1 = c[current_county]
-            status = ('Status \n' +
-                      'County: ' + current_county.title() + '\n' +
-                      'Properties Exist: ' + str(c1.props_exist) + '\n' +
-                      "Distanced Calc'd: " + str(c1.distance_calcd) + '\n' +
-                      'Lakes Found: ' + str(c1.lakes_found) + '\n' +
-                      'Last Updated: ' + c1.last_updated + '\n' +
-                      'Count: ' + str(c1.count) + '\n' +
-                      '# Rated: ' + str(c1.rated) + '\n' +
-                      '# Highly Rated: ' + str(c1.rated_high) + '\n' +
-                      'Original Count: ' + str(c1.orig_count) + '\n' +
-                      'Withdrawn Recently: ' + str(c1.withdrawn_last) + '\n')
-
-            self.textBrowser_status.setPlainText(status)
-
-        else:
-            # This loop will get his when there is no default county - typically during first time running
-            self.textBrowser_status.setPlainText('')
-        return
-
     def delete_data(self):
         current_county = self.combo_county.currentText().lower()
         c[current_county] = CountyClass(current_county)
@@ -261,7 +335,8 @@ else:
 
 
 app = QtWidgets.QApplication(sys.argv)
+app.setStyle("Fusion")
 window = MainWindow()
 window.show()
-app.exec()
+sys.exit(app.exec())
 

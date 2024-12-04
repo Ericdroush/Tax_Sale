@@ -28,3 +28,10 @@ TBD
 - Paste in a text file called props_from_web.csv in this directory
 - C:\Users\ericd\OneDrive\Documents\Python Scripts\Tax_Sale\Counties\Spartanburg
 
+# PyQt6 Instructions
+- Make any changes to the GUI in QT Designer
+- Save file as .ui
+- Open an Anaconda Prompt
+- CD to the right directory ('C:\Users\ericd\OneDrive\Documents\Python Scripts\Tax_Sale\')
+- run "pyuic6 -o qt_ui.py qt_ui.ui"
+- 
