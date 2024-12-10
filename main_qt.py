@@ -30,8 +30,10 @@ from Utils.google_util import find_distance
 from Utils.tax_util import *
 from Utils.gis_utils.county_driver import *
 from PyQt6 import QtWidgets, QtCore
+from PyQt6.QtGui import QPixmap
 from PyQt6.QtCore import Qt, QAbstractTableModel
 from PyQt6.QtWidgets import QApplication, QMainWindow, QStatusBar, QDialog, QTableView, QVBoxLayout
+from PyQt6.QtWidgets import QLabel, QWidget, QHBoxLayout, QDialogButtonBox
 from qt_ui import Ui_QMainWindow
 from list_dlg import Ui_List_Dialog
 
@@ -50,7 +52,13 @@ class PandasModel(QAbstractTableModel):
     def data(self, index, role=Qt.ItemDataRole.DisplayRole):
         if index.isValid():
             if role == Qt.ItemDataRole.DisplayRole:
-                return str(self._data.iloc[index.row(), index.column()])
+                value = self._data.iloc[index.row(), index.column()]
+                if index.column() == 8:  # Acres
+                    value = "%.2f" % value
+                else:
+                    value = str(value)
+
+                return value
         return None
 
     def headerData(self, section, orientation, role=Qt.ItemDataRole.DisplayRole):
@@ -62,22 +70,72 @@ class PandasModel(QAbstractTableModel):
         return None
 
 
-class CustomDialog(QDialog, Ui_List_Dialog):
+class CustomDialog(QDialog):
     def __init__(self, county, props, parent=None, *args, **kwargs):
         super().__init__(parent, *args, **kwargs)
-        self.setupUi(self)
 
-        print(len(props))
-        print(county)
-        # self.pushButton_Close.clicked.connect(close())
+        self.setWindowTitle("County Property Detail Viewer")
+        # self.tableView.installEventFilter(self)
 
         table_view = QTableView()
         model = PandasModel(props)
         table_view.setModel(model)
 
-        layout = QVBoxLayout()
-        layout.addWidget(table_view)
-        self.setLayout(layout)
+        hidden_cols = [2, 6, 7, 10, 22, 23, 24, 28, 29, 30]
+        for col in hidden_cols:
+            table_view.hideColumn(col)
+
+        selection_model = table_view.selectionModel()
+        h_layout_photos = selection_model.selectionChanged.connect(table_view.selected_row, county)
+
+        v_layout = QVBoxLayout()
+        h_layout_table = QHBoxLayout()
+        h_layout_table.addWidget(table_view)
+
+        QBtn = (
+            QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Close
+        )
+
+        self.buttonBox = QDialogButtonBox(QBtn)
+        self.buttonBox.accepted.connect(self.accept)
+        self.buttonBox.rejected.connect(self.reject)
+
+        v_layout.addLayout(h_layout_table)
+        v_layout.addLayout(h_layout_photos)
+        v_layout.addWidget(self.buttonBox)
+        v_layout.setContentsMargins(5, 5, 5, 5)
+        v_layout.setSpacing(20)
+
+        self.setLayout(v_layout)
+
+    def get_tax_map(self):
+        indexes = self.table_view.selectedIndexes()
+        if indexes:
+            index = indexes[0]
+            row = index.row()
+            print(row)
+
+    def update_pictures(self, tax_map, county):
+        print(tax_map, county)
+        h_layout_photos = QHBoxLayout()
+
+        image_label = QLabel(self)
+        pixmap = QPixmap('Counties/' + county + '/MapView/' + str(tax_map) + '.jpg')
+        image_label.setPixmap(pixmap)
+        h_layout_photos.addWidget(image_label)
+
+        image_label2 = QLabel(self)
+        pixmap = QPixmap('Counties/' + county + '/StreetView/' + str(tax_map) + '.jpg')
+        image_label2.setPixmap(pixmap)
+        h_layout_photos.addWidget(image_label2)
+
+        image_label3 = QLabel(self)
+        pixmap = QPixmap('Counties/' + county + '/StreetView/' + str(tax_map) + '.jpg')
+        image_label3.setPixmap(pixmap)
+        h_layout_photos.addWidget(image_label3)
+        h_layout_photos.setSpacing(20)
+
+        return h_layout_photos
 
 
 class MainWindow(QMainWindow, Ui_QMainWindow):

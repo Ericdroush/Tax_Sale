@@ -13,9 +13,6 @@ class Ui_List_Dialog(object):
     def setupUi(self, List_Dialog):
         List_Dialog.setObjectName("List_Dialog")
         List_Dialog.resize(1000, 495)
-        self.pushButton_Close = QtWidgets.QPushButton(parent=List_Dialog)
-        self.pushButton_Close.setGeometry(QtCore.QRect(440, 450, 75, 24))
-        self.pushButton_Close.setObjectName("pushButton_Close")
 
         self.retranslateUi(List_Dialog)
         QtCore.QMetaObject.connectSlotsByName(List_Dialog)
@@ -23,4 +20,3 @@ class Ui_List_Dialog(object):
     def retranslateUi(self, List_Dialog):
         _translate = QtCore.QCoreApplication.translate
         List_Dialog.setWindowTitle(_translate("List_Dialog", "Dialog"))
-        self.pushButton_Close.setText(_translate("List_Dialog", "Close"))

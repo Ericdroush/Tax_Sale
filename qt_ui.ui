@@ -272,28 +272,24 @@
      <string>Test Mode</string>
     </property>
    </widget>
-   <widget class="QTextBrowser" name="textBrowser_print">
+   <widget class="QSplitter" name="splitter">
     <property name="geometry">
      <rect>
       <x>20</x>
       <y>240</y>
-      <width>441</width>
-      <height>201</height>
+      <width>731</width>
+      <height>192</height>
      </rect>
     </property>
-    <property name="placeholderText">
-     <string>Status messages will be printed here</string>
+    <property name="orientation">
+     <enum>Qt::Horizontal</enum>
     </property>
-   </widget>
-   <widget class="QTextBrowser" name="textBrowser_status">
-    <property name="geometry">
-     <rect>
-      <x>470</x>
-      <y>240</y>
-      <width>281</width>
-      <height>201</height>
-     </rect>
-    </property>
+    <widget class="QTextBrowser" name="textBrowser_print">
+     <property name="placeholderText">
+      <string>Status messages will be printed here</string>
+     </property>
+    </widget>
+    <widget class="QTextBrowser" name="textBrowser_status"/>
    </widget>
   </widget>
   <widget class="QMenuBar" name="menubar">
