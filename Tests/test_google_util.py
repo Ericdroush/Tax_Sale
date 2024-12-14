@@ -50,6 +50,6 @@ def test_find_distance_failed():
 
 def test_get_streetview():
     loc = '106 Ford Circle Greer, SC'
-    img = get_streetview(loc)
+    img = get_streetview('Greenville', loc)
     img.show()
     assert 1 == 1

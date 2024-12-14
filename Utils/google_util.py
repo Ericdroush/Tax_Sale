@@ -89,22 +89,22 @@ def get_streetview(taxmap, county, loc):
     from PIL import Image
     import io
 
-    params = {
-        'location': loc,
-        'size': '600x400',
-        'fov': 55
-    }
-    api_name = 'streetview'
-    # output = run_google_api('streetview', params)
-    params['key'] = os.environ["GOOGLE_API_KEY"]
-    response = requests.get(googleapi + api_name + '?', params)
+    if not os.path.isfile('Counties/' + county.title() + '/StreetView/' + taxmap + '.jpg'):
+        params = {
+            'location': loc,
+            'size': '600x400',
+            'fov': 55
+        }
+        api_name = 'streetview'
+        # output = run_google_api('streetview', params)  # Format is slightly different, can't use same call
+        params['key'] = os.environ["GOOGLE_API_KEY"]
+        response = requests.get(googleapi + api_name + '?', params)
 
-    with open('../Counties/' + county + '/StreetView/' + taxmap + '.jpg', "wb") as file:
-        file.write(response.content)
+        with open('Counties/' + county + '/StreetView/' + taxmap + '.jpg', "wb") as file:
+            file.write(response.content)
 
-    img = Image.open(io.BytesIO(response.content))
-    img.show()
-
+        # img = Image.open(io.BytesIO(response.content))
+        # img.show()
     return
 
 
@@ -112,31 +112,31 @@ def get_mapview(taxmap, county, loc):
     from PIL import Image
     import io
 
-    params = {
-        'center': loc,
-        'zoom': 20,
-        'size': '600x400',
-        'format': 'jpg',
-        'scale': 1,
-        'maptype': 'satellite'
-    }
-    api_name = 'staticmap'
-    # output = run_google_api('streetview', params)
-    params['key'] = os.environ["GOOGLE_API_KEY"]
-    response = requests.get(googleapi + api_name + '?', params)
+    zooms = [19, 17]
+    dirs = ['MapView', 'MapWideView']
 
-    with open('../Counties/' + county + '/MapView/' + taxmap + '.jpg', "wb") as file:
-        file.write(response.content)
+    for i in range(len(zooms)):
+        if not os.path.isfile('Counties/' + county + '/' + dirs[i] + '/' + taxmap + '.jpg'):
+            params = {
+                'center': loc,
+                'zoom': zooms[i],  # Larger number = more zoom
+                'size': '600x400',
+                'format': 'jpg',
+                'scale': 1,
+                'maptype': 'satellite'
+            }
+            api_name = 'staticmap'
+            # output = run_google_api('streetview', params)
+            params['key'] = os.environ["GOOGLE_API_KEY"]
+            response = requests.get(googleapi + api_name + '?', params)
 
-    img = Image.open(io.BytesIO(response.content))
-    img.show()
+            with open('Counties/' + county + '/' + dirs[i] + '/' + taxmap + '.jpg', "wb") as file:
+                file.write(response.content)
+
+            # img = Image.open(io.BytesIO(response.content))
+            # img.show()
     return
 
-def get_county_view():
-    pass
-    return
 
-
-# get_streetview('10101011','greenville', '205 Ford Circle Greer, SC')
-# get_mapview('10101010','greenville', '106 Ford Circle Greer, SC')
-
+if __name__ == "__main__":
+    get_mapview('0153000700200','greenville', 'VHCQ+472 Greenville, SC, USA')

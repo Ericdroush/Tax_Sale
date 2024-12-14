@@ -1,0 +1,340 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>QMainWindow</class>
+ <widget class="QMainWindow" name="QMainWindow">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>797</width>
+    <height>541</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Tax Sale Property Screening Tool</string>
+  </property>
+  <widget class="QWidget" name="centralwidget">
+   <widget class="QFrame" name="frame_county">
+    <property name="geometry">
+     <rect>
+      <x>20</x>
+      <y>20</y>
+      <width>270</width>
+      <height>208</height>
+     </rect>
+    </property>
+    <property name="frameShape">
+     <enum>QFrame::StyledPanel</enum>
+    </property>
+    <property name="frameShadow">
+     <enum>QFrame::Raised</enum>
+    </property>
+    <property name="lineWidth">
+     <number>1</number>
+    </property>
+    <widget class="QComboBox" name="combo_county">
+     <property name="geometry">
+      <rect>
+       <x>30</x>
+       <y>50</y>
+       <width>211</width>
+       <height>22</height>
+      </rect>
+     </property>
+     <property name="editable">
+      <bool>false</bool>
+     </property>
+     <property name="placeholderText">
+      <string>Please select a county</string>
+     </property>
+    </widget>
+    <widget class="QLabel" name="label_county">
+     <property name="geometry">
+      <rect>
+       <x>30</x>
+       <y>20</y>
+       <width>221</width>
+       <height>21</height>
+      </rect>
+     </property>
+     <property name="font">
+      <font>
+       <pointsize>12</pointsize>
+      </font>
+     </property>
+     <property name="frameShape">
+      <enum>QFrame::NoFrame</enum>
+     </property>
+     <property name="text">
+      <string>County Selector</string>
+     </property>
+     <property name="textFormat">
+      <enum>Qt::PlainText</enum>
+     </property>
+    </widget>
+    <widget class="QWidget" name="layoutWidget">
+     <property name="geometry">
+      <rect>
+       <x>31</x>
+       <y>91</y>
+       <width>141</width>
+       <height>86</height>
+      </rect>
+     </property>
+     <layout class="QVBoxLayout" name="verticalLayout">
+      <item>
+       <widget class="QPushButton" name="pushButton_getinfo">
+        <property name="text">
+         <string>Get Property Info</string>
+        </property>
+        <property name="flat">
+         <bool>false</bool>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="pushButton_update_list">
+        <property name="text">
+         <string>Update List</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="pushButton_Show_List">
+        <property name="text">
+         <string>Show List</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </widget>
+   <widget class="QFrame" name="frame_distance">
+    <property name="geometry">
+     <rect>
+      <x>295</x>
+      <y>20</y>
+      <width>476</width>
+      <height>157</height>
+     </rect>
+    </property>
+    <property name="frameShape">
+     <enum>QFrame::StyledPanel</enum>
+    </property>
+    <property name="frameShadow">
+     <enum>QFrame::Raised</enum>
+    </property>
+    <widget class="QLabel" name="label_distance">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>20</y>
+       <width>221</width>
+       <height>21</height>
+      </rect>
+     </property>
+     <property name="font">
+      <font>
+       <pointsize>12</pointsize>
+      </font>
+     </property>
+     <property name="frameShape">
+      <enum>QFrame::NoFrame</enum>
+     </property>
+     <property name="text">
+      <string>Select Distance Options</string>
+     </property>
+     <property name="textFormat">
+      <enum>Qt::PlainText</enum>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="pushButton_distance">
+     <property name="geometry">
+      <rect>
+       <x>300</x>
+       <y>80</y>
+       <width>131</width>
+       <height>24</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Calculate Distance</string>
+     </property>
+    </widget>
+    <widget class="QWidget" name="layoutWidget">
+     <property name="geometry">
+      <rect>
+       <x>11</x>
+       <y>51</y>
+       <width>261</width>
+       <height>80</height>
+      </rect>
+     </property>
+     <layout class="QVBoxLayout" name="verticalLayout_2">
+      <item>
+       <widget class="QLineEdit" name="lineEdit_address1">
+        <property name="text">
+         <string/>
+        </property>
+        <property name="placeholderText">
+         <string>Enter Address 1</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLineEdit" name="lineEdit_address2">
+        <property name="text">
+         <string/>
+        </property>
+        <property name="placeholderText">
+         <string>Enter Address 2</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLineEdit" name="lineEdit_address3">
+        <property name="text">
+         <string/>
+        </property>
+        <property name="placeholderText">
+         <string>Enter Address 3</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </widget>
+   <widget class="QFrame" name="frame_lakes">
+    <property name="geometry">
+     <rect>
+      <x>295</x>
+      <y>182</y>
+      <width>476</width>
+      <height>46</height>
+     </rect>
+    </property>
+    <property name="frameShape">
+     <enum>QFrame::StyledPanel</enum>
+    </property>
+    <property name="frameShadow">
+     <enum>QFrame::Raised</enum>
+    </property>
+    <widget class="QWidget" name="">
+     <property name="geometry">
+      <rect>
+       <x>60</x>
+       <y>10</y>
+       <width>331</width>
+       <height>26</height>
+      </rect>
+     </property>
+     <layout class="QHBoxLayout" name="horizontalLayout">
+      <item>
+       <widget class="QPushButton" name="pushButton_pictures">
+        <property name="text">
+         <string>Get Pictures</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="pushButton_lakes">
+        <property name="text">
+         <string>Find Lakes</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </widget>
+   <widget class="QPushButton" name="pushButton_done">
+    <property name="geometry">
+     <rect>
+      <x>131</x>
+      <y>461</y>
+      <width>75</width>
+      <height>24</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Done</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="pushButton_delete">
+    <property name="geometry">
+     <rect>
+      <x>293</x>
+      <y>461</y>
+      <width>75</width>
+      <height>24</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Delete Data</string>
+    </property>
+   </widget>
+   <widget class="QCheckBox" name="checkBox_testmode">
+    <property name="geometry">
+     <rect>
+      <x>454</x>
+      <y>463</y>
+      <width>77</width>
+      <height>20</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Test Mode</string>
+    </property>
+   </widget>
+   <widget class="QTextBrowser" name="textBrowser_print">
+    <property name="geometry">
+     <rect>
+      <x>20</x>
+      <y>240</y>
+      <width>491</width>
+      <height>192</height>
+     </rect>
+    </property>
+    <property name="placeholderText">
+     <string>Status messages will be printed here</string>
+    </property>
+   </widget>
+   <widget class="QTextBrowser" name="textBrowser_status">
+    <property name="geometry">
+     <rect>
+      <x>520</x>
+      <y>240</y>
+      <width>253</width>
+      <height>192</height>
+     </rect>
+    </property>
+   </widget>
+  </widget>
+  <widget class="QMenuBar" name="menubar">
+   <property name="geometry">
+    <rect>
+     <x>0</x>
+     <y>0</y>
+     <width>797</width>
+     <height>22</height>
+    </rect>
+   </property>
+  </widget>
+  <widget class="QStatusBar" name="statusbar"/>
+ </widget>
+ <tabstops>
+  <tabstop>combo_county</tabstop>
+  <tabstop>pushButton_getinfo</tabstop>
+  <tabstop>pushButton_update_list</tabstop>
+  <tabstop>pushButton_Show_List</tabstop>
+  <tabstop>lineEdit_address1</tabstop>
+  <tabstop>lineEdit_address2</tabstop>
+  <tabstop>lineEdit_address3</tabstop>
+  <tabstop>pushButton_distance</tabstop>
+  <tabstop>pushButton_lakes</tabstop>
+  <tabstop>pushButton_done</tabstop>
+  <tabstop>pushButton_delete</tabstop>
+  <tabstop>checkBox_testmode</tabstop>
+ </tabstops>
+ <resources/>
+ <connections/>
+</ui>

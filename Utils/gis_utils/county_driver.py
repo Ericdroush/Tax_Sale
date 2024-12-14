@@ -4,6 +4,7 @@ This is the has overall logic for looking up country information - it calls coun
 
 @author: ericd
 """
+import os
 
 from bs4 import BeautifulSoup
 import pandas as pd
@@ -14,10 +15,10 @@ from Utils.tax_util import *
 from Utils.google_util import *
 
 
-def obtain_props(county, pwin):
+def obtain_props(self, county):
     import io
 
-    print_text(pwin, 'Retrieving tax sale properties ...')
+    self.print_text('Retrieving tax sale properties ...')
     if county == 'greenville':
         req = requests.get('https://www.greenvillecounty.org/appsAS400/Taxsale/')
         soup = BeautifulSoup(req.content, 'html.parser')
@@ -64,9 +65,9 @@ def obtain_props(county, pwin):
         props = pd.read_csv(filename, sep=',', dtype=str)
 
     else:
-        print_text(pwin, 'The county ' + county + ' has not been defined')
+        self.print_text('The county ' + county + ' has not been defined')
 
-    print_text(pwin, str(len(props)) + ' tax sale properties has been retrieved...')
+    self.print_text(str(len(props)) + ' tax sale properties has been retrieved...')
     return props
 
 
@@ -251,13 +252,13 @@ def populate_fields(county, tm, prop, props, output):
     return data_list
 
 
-def get_gis_info(county, pwin, filename, test_flag):
+def get_gis_info(self, county, filename, test_flag):
 
     # Pull list of properties from website
     if test_flag:
-        props = obtain_props(county, pwin).head(5)  # Limit to 5 properties for testing
+        props = obtain_props(self, county).head(5)  # Limit to 5 properties for testing
     else:
-        props = obtain_props(county, pwin)
+        props = obtain_props(self, county)
     total_count = len(props)
 
     cols = get_cols()
@@ -288,8 +289,8 @@ def get_gis_info(county, pwin, filename, test_flag):
                 dt.append(t1 - t0)
                 t0 = t1
                 est_time_left = sum(dt) / len(dt) * (total_count - prop_count)
-                print_text(pwin, '{0}/{1}  Tax map ID: {2} Estimated time remaining = {3}s'
-                           .format(str(prop_count), str(total_count), str(tm), int(est_time_left)))
+                self.print_text('{0}/{1}  Tax map ID: {2} Estimated time remaining = {3}s'
+                                .format(str(prop_count), str(total_count), str(tm), int(est_time_left)))
 
                 if len(output['features']) == 0:  # Didn't get something back from the website
                     pass
@@ -310,20 +311,23 @@ def get_gis_info(county, pwin, filename, test_flag):
     return prop_count
 
 
-def update_withdrawn(county, pwin, filename, test_flag):
+def update_withdrawn(self, county, filename, test_flag):
 
     # Pull list of properties from website
     if test_flag:
-        props = obtain_props(county, pwin).head(3)  # Limit to 5 properties for testing
+        props = obtain_props(self, county).head(3)  # Limit to 5 properties for testing
     else:
-        props = obtain_props(county, pwin)
+        props = obtain_props(self, county)
 
     if Path(filename).is_file():
         props_main = pd.read_csv(filename, sep=',', dtype=get_type())
         initial_count = props_main['withdrawn'].value_counts()['A']
         props_main['withdrawn'] = 'W'   # Set all to withdrawn
         props['withdrawn'] = 'A'   # Set all remaining properties to available
+        props_main.set_index('item', inplace=True)
+        props.set_index('item', inplace=True)
         props_main['withdrawn'].update(props['withdrawn'])
+        props_main.reset_index(drop=False, names='item', inplace=True)
         new_count = props_main['withdrawn'].value_counts()['A']
         withdrawn_count = initial_count - new_count
 
@@ -332,7 +336,7 @@ def update_withdrawn(county, pwin, filename, test_flag):
     else:
         withdrawn_count = 0
         new_count = 0
-        print_text(pwin, 'Opps!  You need to read properties first!')
+        self.print_text('Opps!  You need to read properties first!')
 
     return new_count, withdrawn_count
 
@@ -352,6 +356,37 @@ def lake_url(county, bbox):
         return 0  # Not set up for spartanburg yet
 
 
+def county_pic_url(county, bbox):
+    if county == 'greenville':
+        """
+        Layer   Description
+        0       Symbols
+        17      Swamp Rabbet Trail
+        35      Lot numbers
+        38      Railroad Tracks
+        41      Street Names
+        47, 48  Water
+        49      Colored backgrounds
+        50      Red former property lines
+        52      Property lines
+        
+        58, 59, 60, 61, 62, 63, 64, 66 - Might be flood plain
+
+        2, 3, 4, 5, 16, 39, 40, 43, 78  Empty (at least for test map)
+        """
+        url = ('https://www.gcgis.org/arcgis/rest/services/GreenvilleJS/Map_Layers_JS/MapServer/export?dpi=96'
+               '&transparent=true&format=png8&layers=show%3A52%2C0%2C17%2C38%2C41%2C47%2C48&bbox=')
+        url = url + bbox
+        return url + '&bboxSR=6570&imageSR=6570&size=600%2C400&f=image'
+    elif county == 'anderson':
+        url = ('https://propertyviewer.andersoncountysc.org/arcgis/rest/services/Overlays/MapServer/export?dpi=96'
+               '&transparent=true&format=png8&layers=show%3A1&bbox=')
+        url = url + bbox
+        return url + '&bboxSR=102733&imageSR=102733&size=759%2C885&f=image'
+    elif county == 'spartanburg':
+        return 0  # Not set up for spartanburg yet
+
+
 def set_lake_params(county):
     if county == 'greenville':
         return 0, 'inv'
@@ -361,7 +396,7 @@ def set_lake_params(county):
         return 0, 'inv'  # Hasn't been established yet, just placeholder values
 
 
-def find_lake_props(county, pwin, filename):
+def find_lake_props(self, county, filename):
     from urllib.request import urlopen
     from PIL import Image
 
@@ -396,7 +431,7 @@ def find_lake_props(county, pwin, filename):
             dt.append(t1 - t0)
             t0 = t1
             est_time_left = sum(dt) / len(dt) * (total_count - count)
-            print_text(pwin, 'Finding lake percentages for property {0}/{1}: Estimated time remaining = {2}s'
+            self.print_text('Finding lake percentages for property {0}/{1}: Estimated time remaining = {2}s'
                        .format(str(count), str(total_count), int(est_time_left)))
 
             if isinstance(bbox, float):  # NaN will be a float, expecting a string
@@ -425,8 +460,20 @@ def find_lake_props(county, pwin, filename):
         return True
 
     else:
-        print_text(pwin, "Properties haven't been found yet, need to do that before finding lake properties")
+        self.print_text("Properties haven't been found yet, need to do that before finding lake properties")
         return False
 
 
+def get_county_pictures(taxmap, county, bbox):
+    from urllib.request import urlopen
+    from PIL import Image
 
+    if not os.path.isfile('Counties/' + county.title() + '/CountyView/' + taxmap + '.png'):
+        url = county_pic_url(county, bbox)
+        img = Image.open(urlopen(url))
+        img = img.convert("RGB")
+        img.save('Counties/' + county.title() + '/CountyView/' + taxmap + '.png')
+
+    # img.show()
+
+    return
