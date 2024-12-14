@@ -29,11 +29,11 @@ from Utils.google_util import find_distance
 from Utils.tax_util import *
 from Utils.gis_utils.county_driver import *
 from PyQt6 import QtWidgets, QtCore
-from PyQt6.QtGui import QPixmap
 from PyQt6.QtCore import Qt, QAbstractTableModel, QUrl
 from PyQt6.QtWidgets import QApplication, QMainWindow, QStatusBar, QDialog, QTableView, QVBoxLayout
 from PyQt6.QtWidgets import QLabel, QWidget, QHBoxLayout, QDialogButtonBox
 # from PyQt6.QtWebEngineWidgets import QWebEngineView
+from PyQt6.QtGui import QPixmap, QPainter, QPen, QBrush
 from qt_ui import Ui_QMainWindow
 
 
@@ -162,17 +162,33 @@ class CustomDialog(QDialog):
 
         pic_width = int((self.width() - 40) / 4 - 10)
         pic_height = int(pic_width * 2/3)
+        print(pic_width, pic_height)
+
+        self.pen = QPen(Qt.GlobalColor.red)
+        self.pen.setWidth(5)
 
         pixmap = QPixmap('Counties/' + county + '/MapView/' + str(tax_map) + '.jpg')
+        self.painter_instance = QPainter(pixmap)
+        self.painter_instance.setPen(self.pen)
+        self.painter_instance.drawEllipse(300, 200, 10, 10)
+        self.painter_instance.end()
         self.image_label.setPixmap(pixmap.scaled(pic_width, pic_height))
 
         pixmap = QPixmap('Counties/' + county + '/MapWideView/' + str(tax_map) + '.jpg')
+        self.painter_instance = QPainter(pixmap)
+        self.painter_instance.setPen(self.pen)
+        self.painter_instance.drawEllipse(300, 200, 10, 10)
+        self.painter_instance.end()
         self.image_label1.setPixmap(pixmap.scaled(pic_width, pic_height))
 
         pixmap = QPixmap('Counties/' + county + '/StreetView/' + str(tax_map) + '.jpg')
         self.image_label2.setPixmap(pixmap.scaled(pic_width, pic_height))
 
         pixmap = QPixmap('Counties/' + county + '/CountyView/' + str(tax_map) + '.png')
+        self.painter_instance = QPainter(pixmap)
+        self.painter_instance.setPen(self.pen)
+        self.painter_instance.drawEllipse(300, 200, 10, 10)
+        self.painter_instance.end()
         self.image_label3.setPixmap(pixmap.scaled(pic_width, pic_height))
 
         return
