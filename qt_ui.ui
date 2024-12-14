@@ -19,8 +19,8 @@
      <rect>
       <x>20</x>
       <y>20</y>
-      <width>261</width>
-      <height>201</height>
+      <width>270</width>
+      <height>208</height>
      </rect>
     </property>
     <property name="frameShape">
@@ -72,7 +72,7 @@
       <enum>Qt::PlainText</enum>
      </property>
     </widget>
-    <widget class="QWidget" name="">
+    <widget class="QWidget" name="layoutWidget">
      <property name="geometry">
       <rect>
        <x>31</x>
@@ -112,10 +112,10 @@
    <widget class="QFrame" name="frame_distance">
     <property name="geometry">
      <rect>
-      <x>290</x>
+      <x>295</x>
       <y>20</y>
-      <width>461</width>
-      <height>152</height>
+      <width>476</width>
+      <height>157</height>
      </rect>
     </property>
     <property name="frameShape">
@@ -161,7 +161,7 @@
       <string>Calculate Distance</string>
      </property>
     </widget>
-    <widget class="QWidget" name="">
+    <widget class="QWidget" name="layoutWidget">
      <property name="geometry">
       <rect>
        <x>11</x>
@@ -207,10 +207,10 @@
    <widget class="QFrame" name="frame_lakes">
     <property name="geometry">
      <rect>
-      <x>290</x>
-      <y>177</y>
-      <width>461</width>
-      <height>44</height>
+      <x>295</x>
+      <y>182</y>
+      <width>476</width>
+      <height>46</height>
      </rect>
     </property>
     <property name="frameShape">
@@ -219,18 +219,31 @@
     <property name="frameShadow">
      <enum>QFrame::Raised</enum>
     </property>
-    <widget class="QPushButton" name="pushButton_lakes">
+    <widget class="QWidget" name="">
      <property name="geometry">
       <rect>
-       <x>180</x>
+       <x>60</x>
        <y>10</y>
-       <width>75</width>
-       <height>24</height>
+       <width>331</width>
+       <height>26</height>
       </rect>
      </property>
-     <property name="text">
-      <string>Find Lakes</string>
-     </property>
+     <layout class="QHBoxLayout" name="horizontalLayout">
+      <item>
+       <widget class="QPushButton" name="pushButton_pictures">
+        <property name="text">
+         <string>Get Pictures</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="pushButton_lakes">
+        <property name="text">
+         <string>Find Lakes</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
     </widget>
    </widget>
    <widget class="QPushButton" name="pushButton_done">
@@ -272,24 +285,28 @@
      <string>Test Mode</string>
     </property>
    </widget>
-   <widget class="QSplitter" name="splitter">
+   <widget class="QTextBrowser" name="textBrowser_print">
     <property name="geometry">
      <rect>
       <x>20</x>
       <y>240</y>
-      <width>731</width>
+      <width>491</width>
       <height>192</height>
      </rect>
     </property>
-    <property name="orientation">
-     <enum>Qt::Horizontal</enum>
+    <property name="placeholderText">
+     <string>Status messages will be printed here</string>
     </property>
-    <widget class="QTextBrowser" name="textBrowser_print">
-     <property name="placeholderText">
-      <string>Status messages will be printed here</string>
-     </property>
-    </widget>
-    <widget class="QTextBrowser" name="textBrowser_status"/>
+   </widget>
+   <widget class="QTextBrowser" name="textBrowser_status">
+    <property name="geometry">
+     <rect>
+      <x>520</x>
+      <y>240</y>
+      <width>253</width>
+      <height>192</height>
+     </rect>
+    </property>
    </widget>
   </widget>
   <widget class="QMenuBar" name="menubar">

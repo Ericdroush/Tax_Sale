@@ -4,6 +4,7 @@ This is the has overall logic for looking up country information - it calls coun
 
 @author: ericd
 """
+import os
 
 from bs4 import BeautifulSoup
 import pandas as pd
@@ -289,7 +290,7 @@ def get_gis_info(self, county, filename, test_flag):
                 t0 = t1
                 est_time_left = sum(dt) / len(dt) * (total_count - prop_count)
                 self.print_text('{0}/{1}  Tax map ID: {2} Estimated time remaining = {3}s'
-                           .format(str(prop_count), str(total_count), str(tm), int(est_time_left)))
+                                .format(str(prop_count), str(total_count), str(tm), int(est_time_left)))
 
                 if len(output['features']) == 0:  # Didn't get something back from the website
                     pass
@@ -323,7 +324,10 @@ def update_withdrawn(self, county, filename, test_flag):
         initial_count = props_main['withdrawn'].value_counts()['A']
         props_main['withdrawn'] = 'W'   # Set all to withdrawn
         props['withdrawn'] = 'A'   # Set all remaining properties to available
+        props_main.set_index('item', inplace=True)
+        props.set_index('item', inplace=True)
         props_main['withdrawn'].update(props['withdrawn'])
+        props_main.reset_index(drop=False, names='item', inplace=True)
         new_count = props_main['withdrawn'].value_counts()['A']
         withdrawn_count = initial_count - new_count
 
@@ -343,6 +347,37 @@ def lake_url(county, bbox):
                '&transparent=true&format=png8&layers=show%3A53%2C49%2C48&bbox=')
         url = url + bbox
         return url + '&bboxSR=6570&imageSR=6570&size=937%2C955&f=image'
+    elif county == 'anderson':
+        url = ('https://propertyviewer.andersoncountysc.org/arcgis/rest/services/Overlays/MapServer/export?dpi=96'
+               '&transparent=true&format=png8&layers=show%3A1&bbox=')
+        url = url + bbox
+        return url + '&bboxSR=102733&imageSR=102733&size=759%2C885&f=image'
+    elif county == 'spartanburg':
+        return 0  # Not set up for spartanburg yet
+
+
+def county_pic_url(county, bbox):
+    if county == 'greenville':
+        """
+        Layer   Description
+        0       Symbols
+        17      Swamp Rabbet Trail
+        35      Lot numbers
+        38      Railroad Tracks
+        41      Street Names
+        47, 48  Water
+        49      Colored backgrounds
+        50      Red former property lines
+        52      Property lines
+        
+        58, 59, 60, 61, 62, 63, 64, 66 - Might be flood plain
+
+        2, 3, 4, 5, 16, 39, 40, 43, 78  Empty (at least for test map)
+        """
+        url = ('https://www.gcgis.org/arcgis/rest/services/GreenvilleJS/Map_Layers_JS/MapServer/export?dpi=96'
+               '&transparent=true&format=png8&layers=show%3A52%2C0%2C17%2C38%2C41%2C47%2C48&bbox=')
+        url = url + bbox
+        return url + '&bboxSR=6570&imageSR=6570&size=600%2C400&f=image'
     elif county == 'anderson':
         url = ('https://propertyviewer.andersoncountysc.org/arcgis/rest/services/Overlays/MapServer/export?dpi=96'
                '&transparent=true&format=png8&layers=show%3A1&bbox=')
@@ -429,4 +464,16 @@ def find_lake_props(self, county, filename):
         return False
 
 
+def get_county_pictures(taxmap, county, bbox):
+    from urllib.request import urlopen
+    from PIL import Image
 
+    if not os.path.isfile('Counties/' + county.title() + '/CountyView/' + taxmap + '.png'):
+        url = county_pic_url(county, bbox)
+        img = Image.open(urlopen(url))
+        img = img.convert("RGB")
+        img.save('Counties/' + county.title() + '/CountyView/' + taxmap + '.png')
+
+    # img.show()
+
+    return

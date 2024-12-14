@@ -16,7 +16,6 @@ Dependencies:
 """
 
 import pandas as pd
-from pandasgui import show
 from glob import glob
 import os
 import warnings
@@ -31,11 +30,11 @@ from Utils.tax_util import *
 from Utils.gis_utils.county_driver import *
 from PyQt6 import QtWidgets, QtCore
 from PyQt6.QtGui import QPixmap
-from PyQt6.QtCore import Qt, QAbstractTableModel
+from PyQt6.QtCore import Qt, QAbstractTableModel, QUrl
 from PyQt6.QtWidgets import QApplication, QMainWindow, QStatusBar, QDialog, QTableView, QVBoxLayout
 from PyQt6.QtWidgets import QLabel, QWidget, QHBoxLayout, QDialogButtonBox
+# from PyQt6.QtWebEngineWidgets import QWebEngineView
 from qt_ui import Ui_QMainWindow
-from list_dlg import Ui_List_Dialog
 
 
 class PandasModel(QAbstractTableModel):
@@ -61,6 +60,19 @@ class PandasModel(QAbstractTableModel):
                 return value
         return None
 
+    def setData(self, index, value, role=Qt.ItemDataRole.EditRole):
+        if role == Qt.ItemDataRole.EditRole:
+            try:
+                self._data.iloc[index.row(), index.column()] = value
+                self.dataChanged.emit(index, index)
+                return True
+            except:
+                return False
+        return False
+
+    def flags(self, index):
+        return Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable | Qt.ItemFlag.ItemIsEditable
+
     def headerData(self, section, orientation, role=Qt.ItemDataRole.DisplayRole):
         if role == Qt.ItemDataRole.DisplayRole:
             if orientation == Qt.Orientation.Horizontal:
@@ -69,73 +81,105 @@ class PandasModel(QAbstractTableModel):
                 return str(self._data.index[section])
         return None
 
+    def sort(self, column, order):
+        self.layoutAboutToBeChanged.emit()
+        self._data.sort_values(by=self._data.columns[column], ascending=order == Qt.SortOrder.AscendingOrder, inplace=True)
+        self.layoutChanged.emit()
+
 
 class CustomDialog(QDialog):
     def __init__(self, county, props, parent=None, *args, **kwargs):
         super().__init__(parent, *args, **kwargs)
 
         self.setWindowTitle("County Property Detail Viewer")
-        # self.tableView.installEventFilter(self)
+        self.setWindowFlags(self.windowFlags() | Qt.WindowType.WindowMaximizeButtonHint)
 
-        table_view = QTableView()
-        model = PandasModel(props)
-        table_view.setModel(model)
+        self.table_view = QTableView()
+        self.model = PandasModel(props)
+        self.table_view.setModel(self.model)
+        self.table_view.setSortingEnabled(True)
 
-        hidden_cols = [2, 6, 7, 10, 22, 23, 24, 28, 29, 30]
+        hidden_cols = [2, 6, 7, 10, 22, 23, 24, 28, 29, 30]  # Base hidden columns
+        hidden_cols.extend([14, 15, 16, 18, 26, 27])
         for col in hidden_cols:
-            table_view.hideColumn(col)
+            self.table_view.hideColumn(col)
 
-        selection_model = table_view.selectionModel()
-        h_layout_photos = selection_model.selectionChanged.connect(table_view.selected_row, county)
+        pic_width = 300
+        pic_height = int(pic_width * 2/3)
+        self.selection_model = self.table_view.selectionModel()
+        self.selection_model.selectionChanged.connect(lambda: self.update_pictures(county))
 
-        v_layout = QVBoxLayout()
-        h_layout_table = QHBoxLayout()
-        h_layout_table.addWidget(table_view)
+        self.v_layout = QVBoxLayout()
+        self.h_layout_table = QHBoxLayout()
+        self.h_layout_table.addWidget(self.table_view)
 
-        QBtn = (
-            QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Close
-        )
+        self.h_layout_photos = QHBoxLayout()
 
-        self.buttonBox = QDialogButtonBox(QBtn)
+        self.image_label = QLabel(self)
+        pixmap = QPixmap('Counties/' + county + '/MapView/test.jpg')
+        self.image_label.setPixmap(pixmap.scaled(pic_width, pic_height))
+        # self.image_label.setCursor(Qt.CursorShape.PointingHandCursor)
+        # self.image_label.mousePressEvent = self.open_link('https://www.google.com/maps')
+        self.h_layout_photos.addWidget(self.image_label)
+
+        self.image_label1 = QLabel(self)
+        pixmap = QPixmap('Counties/' + county + '/MapWideView/test.jpg')
+        self.image_label1.setPixmap(pixmap.scaled(pic_width, pic_height))
+        self.h_layout_photos.addWidget(self.image_label1)
+
+        self.image_label2 = QLabel(self)
+        pixmap = QPixmap('Counties/' + county + '/StreetView/test.jpg')
+        self.image_label2.setPixmap(pixmap.scaled(pic_width, pic_height))
+        self.h_layout_photos.addWidget(self.image_label2)
+
+        self.image_label3 = QLabel(self)
+        pixmap = QPixmap('Counties/' + county + '/CountyView/test.jpg')
+        self.image_label3.setPixmap(pixmap.scaled(pic_width, pic_height))
+        self.h_layout_photos.addWidget(self.image_label3)
+        self.h_layout_photos.setSpacing(20)
+
+        q_btn = (QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Close)
+
+        self.buttonBox = QDialogButtonBox(q_btn)
         self.buttonBox.accepted.connect(self.accept)
         self.buttonBox.rejected.connect(self.reject)
 
-        v_layout.addLayout(h_layout_table)
-        v_layout.addLayout(h_layout_photos)
-        v_layout.addWidget(self.buttonBox)
-        v_layout.setContentsMargins(5, 5, 5, 5)
-        v_layout.setSpacing(20)
+        self.v_layout.addLayout(self.h_layout_table)
+        self.v_layout.addLayout(self.h_layout_photos)
+        self.v_layout.addWidget(self.buttonBox)
+        self.v_layout.setContentsMargins(5, 5, 5, 5)
+        self.v_layout.setSpacing(20)
 
-        self.setLayout(v_layout)
+        self.setLayout(self.v_layout)
 
-    def get_tax_map(self):
+    def update_pictures(self, county):
         indexes = self.table_view.selectedIndexes()
         if indexes:
             index = indexes[0]
-            row = index.row()
-            print(row)
+            tax_map = index.siblingAtColumn(1).data()
+        else:
+            return
 
-    def update_pictures(self, tax_map, county):
-        print(tax_map, county)
-        h_layout_photos = QHBoxLayout()
+        pic_width = int((self.width() - 40) / 4 - 10)
+        pic_height = int(pic_width * 2/3)
 
-        image_label = QLabel(self)
         pixmap = QPixmap('Counties/' + county + '/MapView/' + str(tax_map) + '.jpg')
-        image_label.setPixmap(pixmap)
-        h_layout_photos.addWidget(image_label)
+        self.image_label.setPixmap(pixmap.scaled(pic_width, pic_height))
 
-        image_label2 = QLabel(self)
+        pixmap = QPixmap('Counties/' + county + '/MapWideView/' + str(tax_map) + '.jpg')
+        self.image_label1.setPixmap(pixmap.scaled(pic_width, pic_height))
+
         pixmap = QPixmap('Counties/' + county + '/StreetView/' + str(tax_map) + '.jpg')
-        image_label2.setPixmap(pixmap)
-        h_layout_photos.addWidget(image_label2)
+        self.image_label2.setPixmap(pixmap.scaled(pic_width, pic_height))
 
-        image_label3 = QLabel(self)
-        pixmap = QPixmap('Counties/' + county + '/StreetView/' + str(tax_map) + '.jpg')
-        image_label3.setPixmap(pixmap)
-        h_layout_photos.addWidget(image_label3)
-        h_layout_photos.setSpacing(20)
+        pixmap = QPixmap('Counties/' + county + '/CountyView/' + str(tax_map) + '.png')
+        self.image_label3.setPixmap(pixmap.scaled(pic_width, pic_height))
 
-        return h_layout_photos
+        return
+
+    # def open_link(self, event, url):
+    #     url = QUrl(url)
+    #     QWebEngineView.openUrl(url)
 
 
 class MainWindow(QMainWindow, Ui_QMainWindow):
@@ -156,6 +200,7 @@ class MainWindow(QMainWindow, Ui_QMainWindow):
         self.pushButton_Show_List.clicked.connect(self.show_gui)
         self.pushButton_distance.clicked.connect(self.calc_distance)
         self.pushButton_lakes.clicked.connect(self.find_lakes)
+        self.pushButton_pictures.clicked.connect(self.find_pictures)
         self.pushButton_delete.clicked.connect(self.delete_data)
 
         # Call these to properly initialize the form - they won't get called if the default county is the first county
@@ -196,6 +241,7 @@ class MainWindow(QMainWindow, Ui_QMainWindow):
                       'Properties Exist: ' + str(c1.props_exist) + '\n' +
                       "Distanced Calc'd: " + str(c1.distance_calcd) + '\n' +
                       'Lakes Found: ' + str(c1.lakes_found) + '\n' +
+                      'Pictures Found: ' + str(c1.pics_found) + '\n' +
                       'Last Updated: ' + c1.last_updated + '\n' +
                       'Count: ' + str(c1.count) + '\n' +
                       '# Rated: ' + str(c1.rated) + '\n' +
@@ -225,19 +271,17 @@ class MainWindow(QMainWindow, Ui_QMainWindow):
     def show_gui(self):
         self.print_text('Starting gui...')
         props = self.read_props()
+        props_gui = props[props['withdrawn'] == 'A']
+        props_withdrawn = props[props['withdrawn'] == 'W']
         county = self.combo_county.currentText()
-        dlg = CustomDialog(county, props)
-        dlg.exec()
-
-    def show_gui_old(self):
-        props = self.read_props()
-        self.print_text('Starting gui...')
-        gui = show(props)
-        # , settings={'theme':'dark'}
-        # Code pauses while the gui is open
-        props_new = gui['props']
-        self.count_rated(props_new)
-        props_new.to_csv(self.get_filename(), index=False, na_rep='NaN')
+        dlg = CustomDialog(county, props_gui)
+        result = dlg.exec()
+        if result == 1:  # Accepted, aka Save
+            props_gui['rating'] = pd.to_numeric(props_gui['rating'], errors='coerce')
+            self.count_rated(props_gui)
+            props = pd.concat([props_gui, props_withdrawn], ignore_index=True)
+            props.to_csv(self.get_filename(), index=False, na_rep='NaN')
+            self.print_text('Properties have been successfully saved')
 
     def close_window(self):
         self.write_init_file()
@@ -340,6 +384,38 @@ class MainWindow(QMainWindow, Ui_QMainWindow):
         self.update_status()
         self.print_text('Done updating...')
 
+    def find_pictures(self):
+        self.print_text('Downloading Pictures...')
+        current_county = self.combo_county.currentText().lower()
+        props = pd.read_csv(self.get_filename(), sep=',', dtype=get_type())
+
+        t0 = time.perf_counter()
+        dt = []
+        count = 0
+        total_count = len(props)
+        for index, row in props.iterrows():
+            count += 1
+            t1 = time.perf_counter()
+            dt.append(t1 - t0)
+            t0 = t1
+            est_time_left = sum(dt) / len(dt) * (total_count - count)
+            self.print_text('Downloading pictures from google and county website for property {0}/{1}: '
+                            'Estimated time remaining = {2}s'
+                            .format(str(count), str(total_count), int(est_time_left)))
+            bbox = row['bbox']
+            taxmap = row['taxmap']
+            loc = row['address']
+
+            if isinstance(bbox, str):  # NaN will be a float, expecting a string
+                get_county_pictures(taxmap, current_county, bbox)
+
+            get_mapview(taxmap, current_county, loc)
+            get_streetview(taxmap, current_county, loc)
+
+        c[current_county].pics_found = True
+        self.update_status()
+        self.print_text('Done updating...')
+
     def delete_data(self):
         current_county = self.combo_county.currentText().lower()
         c[current_county] = CountyClass(current_county)
@@ -349,7 +425,8 @@ class MainWindow(QMainWindow, Ui_QMainWindow):
         self.print_text('Data erased for ' + current_county)
 
     def print_text(self, inp):
-        self.textBrowser_print.append(str(inp) + '\n')
+        # self.textBrowser_print.append(str(inp) + '\n')
+        self.textBrowser_print.append(str(inp))
         QApplication.processEvents()
 
 
@@ -363,7 +440,7 @@ counties_list = get_counties()
 
 c = {}
 for county in counties_list:
-    mod = importlib.import_module('Utils.gis_utils.' + county, package=None)
+    # mod = importlib.import_module('Utils.gis_utils.' + county, package=None)
     c[county] = CountyClass(county)
 
 # Read initialization data
@@ -382,6 +459,7 @@ if os.path.isfile('datafile.txt'):
             c[c1].addr3 = line['addr3']
             c[c1].distance_calcd = line['distance_calcd']
             c[c1].lakes_found = line['lakes_found']
+            c[c1].pics_found = line['pics_found']
             c[c1].last_updated = line['last_updated']
             c[c1].count = line['count']
             c[c1].rated = line['rated']
