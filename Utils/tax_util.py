@@ -14,7 +14,7 @@ def get_cols():
     return ['item', 'taxmap', 'account', 'owner', 'address', 'subdiv', 'tax_dist', 'bldgs', 'acres', 'land_use',
             'bldg_type', 'bedrooms', 'sq_ft', 'dpsf', 'yr_built', 'appraised_land', 'appraised_bldg', 'appraised_total',
             'bldg_ratio', 'sale_price', 'sale_date', 'lake%', 'bbox', 'lat', 'long', 'dist1', 'dist2', 'dist3',
-            'withdrawn', 'county_link', 'map_link', 'amount_due', 'comments', 'rating', 'bid']
+            'withdrawn', 'county_link', 'map_link', 'amount_due', 'comments', 'rating', 'bid', 'max_bid']
 
 
 def get_type():
@@ -53,7 +53,8 @@ def get_type():
         'amount_due': float,
         'comments': str,
         'rating': float,
-        'bid': float
+        'bid': float,
+        'max_bid': float,
     }
     return type_dict
 

@@ -130,14 +130,15 @@ class CustomDialog(QDialog):
         self.table_view.setColumnWidth(12, 50)  # Sq_ft
         self.table_view.setColumnWidth(13, 50)  # dpsf
         self.table_view.setColumnWidth(17, 100)  # Appraised
-        self.table_view.setColumnWidth(19, 100)  # Sale Price
-        self.table_view.setColumnWidth(20, 100)  # Sale Date
+        self.table_view.setColumnWidth(19, 80)  # Sale Price
+        self.table_view.setColumnWidth(20, 80)  # Sale Date
         self.table_view.setColumnWidth(21, 50)  # lake %
         self.table_view.setColumnWidth(25, 50)  # Dist1
-        self.table_view.setColumnWidth(31, 100)  # Amount Due
+        self.table_view.setColumnWidth(31, 80)  # Amount Due
         self.table_view.setColumnWidth(32, 250)  # Comments
         self.table_view.setColumnWidth(33, 50)  # Rating
         self.table_view.setColumnWidth(34, 100)  # Bid
+        self.table_view.setColumnWidth(35, 100)  # Bid
 
         pic_width = 300
         pic_height = int(pic_width * 2/3)
