@@ -243,11 +243,13 @@ def populate_fields(county, tm, prop, props, output):
     elif county == 'spartanburg':
         pass
 
+    amount_due = float(props['amount_due'].iloc[prop].strip('$').replace(',', ''))
+    # Ths logic is that I won't be too bummed about only earning 6% but would be more bummed by not being able to bid
+    max_bid = amount_due / 0.06  # This could have been set to amount_due / 0.12 to be more conservative
     data_list = [props['item'].iloc[prop], tm, account, props['owner'].iloc[prop], address, subdiv, tax_dist,
                  bldgs, acres, landuse, bldg_type, bedrooms, sq_ft, dpsf, yr_built, appraised_land, appraised_bldg,
                  appraised_total, bldg_ratio, sale_price, sale_date, lake, bbox, lat, lon, dist1, dist2, dist3,
-                 withdrawn, county_link, map_link, float(props['amount_due'].iloc[prop].strip('$').replace(',', '')),
-                 '', '', '']
+                 withdrawn, county_link, map_link, amount_due, '', '', '', max_bid]
 
     return data_list
 
