@@ -119,6 +119,34 @@ class CustomDialog(QDialog):
         for col in hidden_cols:
             self.table_view.hideColumn(col)
 
+        self.table_view.setColumnWidth(0, 50)  # Item
+        self.table_view.setColumnWidth(1, 100)  # TaxMap
+        self.table_view.setColumnWidth(3, 200)  # Owner
+        self.table_view.setColumnWidth(4, 200)  # Address
+        self.table_view.setColumnWidth(5, 100)  # Subdiv
+        self.table_view.setColumnWidth(8, 50)  # Acres
+        self.table_view.setColumnWidth(9, 50)  # Landuse
+        self.table_view.setColumnWidth(11, 50)  # Bedrooms
+        self.table_view.setColumnWidth(12, 50)  # Sq_ft
+        self.table_view.setColumnWidth(13, 50)  # dpsf
+        self.table_view.setColumnWidth(17, 100)  # Appraised
+        self.table_view.setColumnWidth(19, 100)  # Sale Price
+        self.table_view.setColumnWidth(20, 100)  # Sale Date
+        self.table_view.setColumnWidth(21, 50)  # lake %
+        self.table_view.setColumnWidth(25, 50)  # Dist1
+        self.table_view.setColumnWidth(31, 100)  # Amount Due
+        self.table_view.setColumnWidth(32, 250)  # Comments
+        self.table_view.setColumnWidth(33, 50)  # Rating
+        self.table_view.setColumnWidth(34, 100)  # Bid
+        self.table_view.sel
+
+
+
+
+
+
+
+
         pic_width = 300
         pic_height = int(pic_width * 2/3)
         self.selection_model = self.table_view.selectionModel()
