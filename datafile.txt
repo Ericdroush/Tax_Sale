@@ -1,4 +1,4 @@
 Greenville
-{'name': 'greenville', 'props_exist': True, 'addr1': '106 Ford Circle, Greer, SC', 'addr2': '', 'addr3': '', 'distance_calcd': True, 'lakes_found': False, 'pics_found': True, 'last_updated': '12/13/2024', 'count': 468, 'rated': 130, 'rated_high': 25, 'orig_count': 984, 'withdrawn_last': 516}
+{'name': 'greenville', 'props_exist': True, 'addr1': '106 Ford Circle, Greer, SC', 'addr2': '', 'addr3': '', 'distance_calcd': True, 'lakes_found': False, 'pics_found': True, 'last_updated': '12/14/2024', 'count': 468, 'rated': 252, 'rated_high': 46, 'orig_count': 984, 'withdrawn_last': 0}
 {'name': 'anderson', 'props_exist': True, 'addr1': '316 Boulevard, Anderson, SC 29621', 'addr2': '', 'addr3': '', 'distance_calcd': True, 'lakes_found': True, 'pics_found': False, 'last_updated': '10/07/2024', 'count': 1411, 'rated': 0, 'rated_high': 0, 'orig_count': 1411, 'withdrawn_last': 0}
 {'name': 'spartanburg', 'props_exist': False, 'addr1': '', 'addr2': '', 'addr3': '', 'distance_calcd': False, 'lakes_found': False, 'pics_found': False, 'last_updated': '', 'count': 0, 'rated': 0, 'rated_high': 0, 'orig_count': 0, 'withdrawn_last': 0}
