@@ -138,14 +138,6 @@ class CustomDialog(QDialog):
         self.table_view.setColumnWidth(32, 250)  # Comments
         self.table_view.setColumnWidth(33, 50)  # Rating
         self.table_view.setColumnWidth(34, 100)  # Bid
-        self.table_view.sel
-
-
-
-
-
-
-
 
         pic_width = 300
         pic_height = int(pic_width * 2/3)
