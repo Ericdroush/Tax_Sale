@@ -138,6 +138,30 @@ class CustomDialog(QDialog):
         self.h_layout_photos.addWidget(self.image_label3)
         self.h_layout_photos.setSpacing(20)
 
+        self.h_layout_captions = QHBoxLayout()
+        url_link = '<a href="https://www.google.com/maps/">Google Maps</a>'
+        self.label = QLabel(self)
+        self.label.setText(url_link)
+        self.label.setOpenExternalLinks(True)
+        self.h_layout_captions.addWidget(self.label)
+
+        self.label1 = QLabel(self)
+        self.label1.setText(url_link)
+        self.label1.setOpenExternalLinks(True)
+        self.h_layout_captions.addWidget(self.label1)
+
+        self.label2 = QLabel(self)
+        self.label2.setText(url_link)
+        self.label2.setOpenExternalLinks(True)
+        self.h_layout_captions.addWidget(self.label2)
+
+        url_link = '<a href="https://www.gcgis.org/apps/GreenvilleJS/">GCGIS</a>'
+        self.label3 = QLabel(self)
+        self.label3.setText(url_link)
+        self.label3.setOpenExternalLinks(True)
+        self.h_layout_captions.addWidget(self.label3)
+        self.h_layout_captions.setSpacing(20)
+
         q_btn = (QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Close)
 
         self.buttonBox = QDialogButtonBox(q_btn)
@@ -146,6 +170,7 @@ class CustomDialog(QDialog):
 
         self.v_layout.addLayout(self.h_layout_table)
         self.v_layout.addLayout(self.h_layout_photos)
+        self.v_layout.addLayout(self.h_layout_captions)
         self.v_layout.addWidget(self.buttonBox)
         self.v_layout.setContentsMargins(5, 5, 5, 5)
         self.v_layout.setSpacing(20)
@@ -157,6 +182,7 @@ class CustomDialog(QDialog):
         if indexes:
             index = indexes[0]
             tax_map = index.siblingAtColumn(1).data()
+            address = index.siblingAtColumn(4).data()
         else:
             return
 
@@ -173,6 +199,12 @@ class CustomDialog(QDialog):
         self.painter_instance.drawEllipse(300, 200, 10, 10)
         self.painter_instance.end()
         self.image_label.setPixmap(pixmap.scaled(pic_width, pic_height))
+        link_address = ('https://www.google.com/maps/place/' +
+                        address.split()[0].replace('+', '%2B') + ',+' +
+                        address.split(',')[0].split()[1].replace(' ', '+') + ',+' +
+                        address.split(',')[1].strip())
+        url_link = '<a href="' + link_address + '">Google Maps</a>'
+        self.label.setText(url_link)
 
         pixmap = QPixmap('Counties/' + county + '/MapWideView/' + str(tax_map) + '.jpg')
         self.painter_instance = QPainter(pixmap)
@@ -180,9 +212,11 @@ class CustomDialog(QDialog):
         self.painter_instance.drawEllipse(300, 200, 10, 10)
         self.painter_instance.end()
         self.image_label1.setPixmap(pixmap.scaled(pic_width, pic_height))
+        self.label1.setText(url_link)
 
         pixmap = QPixmap('Counties/' + county + '/StreetView/' + str(tax_map) + '.jpg')
         self.image_label2.setPixmap(pixmap.scaled(pic_width, pic_height))
+        self.label2.setText(url_link)
 
         pixmap = QPixmap('Counties/' + county + '/CountyView/' + str(tax_map) + '.png')
         self.painter_instance = QPainter(pixmap)
@@ -190,6 +224,8 @@ class CustomDialog(QDialog):
         self.painter_instance.drawEllipse(300, 200, 10, 10)
         self.painter_instance.end()
         self.image_label3.setPixmap(pixmap.scaled(pic_width, pic_height))
+        url_link = '<a href="https://www.gcgis.org/apps/GreenvilleJS/?PIN=' + tax_map + '">Google Maps</a>'
+        self.label3.setText(url_link)
 
         return
 
@@ -441,7 +477,6 @@ class MainWindow(QMainWindow, Ui_QMainWindow):
         self.print_text('Data erased for ' + current_county)
 
     def print_text(self, inp):
-        # self.textBrowser_print.append(str(inp) + '\n')
         self.textBrowser_print.append(str(inp))
         QApplication.processEvents()
 
