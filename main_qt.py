@@ -31,9 +31,9 @@ from Utils.gis_utils.county_driver import *
 from PyQt6 import QtWidgets, QtCore
 from PyQt6.QtCore import Qt, QAbstractTableModel, QUrl
 from PyQt6.QtWidgets import QApplication, QMainWindow, QStatusBar, QDialog, QTableView, QVBoxLayout
-from PyQt6.QtWidgets import QLabel, QWidget, QHBoxLayout, QDialogButtonBox
+from PyQt6.QtWidgets import QLabel, QWidget, QHBoxLayout, QDialogButtonBox, QStyledItemDelegate, QStyle, QStyleOption
 # from PyQt6.QtWebEngineWidgets import QWebEngineView
-from PyQt6.QtGui import QPixmap, QPainter, QPen, QBrush
+from PyQt6.QtGui import QPixmap, QPainter, QPen, QBrush, QColor, QFont
 from qt_ui import Ui_QMainWindow
 
 
@@ -41,6 +41,9 @@ class PandasModel(QAbstractTableModel):
     def __init__(self, data):
         super().__init__()
         self._data = data
+        self.color_enabled = True
+        self.color_back = Qt.GlobalColor.magenta
+        self.target_row = -1
 
     def rowCount(self, parent=None):
         return self._data.shape[0]
@@ -58,6 +61,17 @@ class PandasModel(QAbstractTableModel):
                     value = str(value)
 
                 return value
+            if role == Qt.ItemDataRole.BackgroundRole:
+                if index.row() % 2 == 0:
+                    return QBrush(QColor(235, 235, 235))
+            # if role == Qt.ItemDataRole.BackgroundRole:
+            #     print(1)
+            #     return QBrush()
+            # if role == Qt.ItemDataRole.BackgroundRole:
+            #     print(index.row())
+            #     print(self.color_enabled)
+            #     # if index.row() == self.target_row and self.color_enabled is True:
+            #     return QBrush(self.color_back)
         return None
 
     def setData(self, index, value, role=Qt.ItemDataRole.EditRole):
@@ -98,16 +112,38 @@ class CustomDialog(QDialog):
         self.model = PandasModel(props)
         self.table_view.setModel(self.model)
         self.table_view.setSortingEnabled(True)
+        self.table_view.setStyleSheet("QTableView::item:selected{background:rgb(12, 128, 220)}")
 
         hidden_cols = [2, 6, 7, 10, 22, 23, 24, 28, 29, 30]  # Base hidden columns
         hidden_cols.extend([14, 15, 16, 18, 26, 27])
         for col in hidden_cols:
             self.table_view.hideColumn(col)
 
+        self.table_view.setColumnWidth(0, 50)  # Item
+        self.table_view.setColumnWidth(1, 100)  # TaxMap
+        self.table_view.setColumnWidth(3, 200)  # Owner
+        self.table_view.setColumnWidth(4, 200)  # Address
+        self.table_view.setColumnWidth(5, 100)  # Subdiv
+        self.table_view.setColumnWidth(8, 50)  # Acres
+        self.table_view.setColumnWidth(9, 50)  # Landuse
+        self.table_view.setColumnWidth(11, 50)  # Bedrooms
+        self.table_view.setColumnWidth(12, 50)  # Sq_ft
+        self.table_view.setColumnWidth(13, 50)  # dpsf
+        self.table_view.setColumnWidth(17, 100)  # Appraised
+        self.table_view.setColumnWidth(19, 100)  # Sale Price
+        self.table_view.setColumnWidth(20, 100)  # Sale Date
+        self.table_view.setColumnWidth(21, 50)  # lake %
+        self.table_view.setColumnWidth(25, 50)  # Dist1
+        self.table_view.setColumnWidth(31, 100)  # Amount Due
+        self.table_view.setColumnWidth(32, 250)  # Comments
+        self.table_view.setColumnWidth(33, 50)  # Rating
+        self.table_view.setColumnWidth(34, 100)  # Bid
+
         pic_width = 300
         pic_height = int(pic_width * 2/3)
         self.selection_model = self.table_view.selectionModel()
         self.selection_model.selectionChanged.connect(lambda: self.update_pictures(county))
+        # self.selection_model.selectionChanged.connect(self.highlight_row)
 
         self.v_layout = QVBoxLayout()
         self.h_layout_table = QHBoxLayout()
@@ -118,8 +154,6 @@ class CustomDialog(QDialog):
         self.image_label = QLabel(self)
         pixmap = QPixmap('Counties/' + county + '/MapView/test.jpg')
         self.image_label.setPixmap(pixmap.scaled(pic_width, pic_height))
-        # self.image_label.setCursor(Qt.CursorShape.PointingHandCursor)
-        # self.image_label.mousePressEvent = self.open_link('https://www.google.com/maps')
         self.h_layout_photos.addWidget(self.image_label)
 
         self.image_label1 = QLabel(self)
@@ -188,7 +222,6 @@ class CustomDialog(QDialog):
 
         pic_width = int((self.width() - 40) / 4 - 10)
         pic_height = int(pic_width * 2/3)
-        print(pic_width, pic_height)
 
         self.pen = QPen(Qt.GlobalColor.red)
         self.pen.setWidth(5)
@@ -224,10 +257,27 @@ class CustomDialog(QDialog):
         self.painter_instance.drawEllipse(300, 200, 10, 10)
         self.painter_instance.end()
         self.image_label3.setPixmap(pixmap.scaled(pic_width, pic_height))
-        url_link = '<a href="https://www.gcgis.org/apps/GreenvilleJS/?PIN=' + tax_map + '">Google Maps</a>'
+        url_link = '<a href="https://www.gcgis.org/apps/GreenvilleJS/?PIN=' + tax_map + '">GCGIS</a>'
         self.label3.setText(url_link)
 
         return
+
+    # def highlight_row(self, selected, deselected):
+    #     for index in selected.indexes():
+    #         print(index.row())
+    #         for col in range(self.model.columnCount()):
+    #             item = self.model.data(index, Qt.ItemDataRole.BackgroundRole)
+    #             print(item)
+    #             if item:
+    #                 item.setBackground(Qt.GlobalColor.yellow)
+    #
+    #     for index in deselected.indexes():
+    #         print(index.row())
+    #         for col in range(self.model.columnCount()):
+    #             item = self.model.data(index, Qt.ItemDataRole.BackgroundRole)
+    #             print(item)
+    #             if item:
+    #                 item.setBackground(Qt.GlobalColor.white)
 
     # def open_link(self, event, url):
     #     url = QUrl(url)
