@@ -53,7 +53,7 @@ def get_type():
         'amount_due': float,
         'comments': str,
         'rating': float,
-        'bid': float,
+        'bid': str,
         'max_bid': float,
     }
     return type_dict
