@@ -381,6 +381,7 @@ class MainWindow(QMainWindow, Ui_QMainWindow):
         result = dlg.exec()
         if result == 1:  # Accepted, aka Save
             props_gui['rating'] = pd.to_numeric(props_gui['rating'], errors='coerce')
+            # props_gui['bid'] = pd.to_numeric(props_gui['bid '], errors='coerce')
             self.count_rated(props_gui)
             props = pd.concat([props_gui, props_withdrawn], ignore_index=True)
             props.to_csv(self.get_filename(), index=False, na_rep='NaN')
@@ -408,6 +409,8 @@ class MainWindow(QMainWindow, Ui_QMainWindow):
 
     def read_props(self):
         df = pd.read_csv(self.get_filename(), dtype=get_type())
+        # Read bid as a string, but convert to a number - more forgiving than
+        df['bid'] = pd.to_numeric(df['bid'], errors='coerce')
         self.count_rated(df)
         self.print_text('Properties have been read in for ' + self.combo_county.currentText() + ' County')
         return df
@@ -490,7 +493,7 @@ class MainWindow(QMainWindow, Ui_QMainWindow):
     def find_pictures(self):
         self.print_text('Downloading Pictures...')
         current_county = self.combo_county.currentText().lower()
-        props = pd.read_csv(self.get_filename(), sep=',', dtype=get_type())
+        props = self.read_props()
 
         t0 = time.perf_counter()
         dt = []

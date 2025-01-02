@@ -16,7 +16,3 @@ class CountyClass:
         self.rated_high = 0
         self.orig_count = 0
         self.withdrawn_last = 0
-
-
-
-
