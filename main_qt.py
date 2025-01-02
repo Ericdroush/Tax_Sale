@@ -410,7 +410,7 @@ class MainWindow(QMainWindow, Ui_QMainWindow):
     def read_props(self):
         df = pd.read_csv(self.get_filename(), dtype=get_type())
         # Read bid as a string, but convert to a number - more forgiving than
-        df['bid'] = pd.to_numeric(df['bid'], errors='coerce')
+        df['bid'] = pd.to_numeric(df['bid'].str.replace(',', ''), errors='coerce')
         self.count_rated(df)
         self.print_text('Properties have been read in for ' + self.combo_county.currentText() + ' County')
         return df
