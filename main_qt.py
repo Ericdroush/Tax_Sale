@@ -111,34 +111,39 @@ class CustomDialog(QDialog):
         self.table_view = QTableView()
         self.model = PandasModel(props)
         self.table_view.setModel(self.model)
-        self.table_view.setSortingEnabled(True)
+        self.table_view.setSortingEnabled(False)
         self.table_view.setStyleSheet("QTableView::item:selected{background:rgb(12, 128, 220)}")
 
         hidden_cols = [2, 6, 7, 10, 22, 23, 24, 28, 29, 30]  # Base hidden columns
         hidden_cols.extend([14, 15, 16, 18, 26, 27])
+
+        # Extra hidden columns for laptop
+        hidden_cols.extend([11, 12, 13, 21])
+
         for col in hidden_cols:
             self.table_view.hideColumn(col)
 
         self.table_view.setColumnWidth(0, 50)  # Item
         self.table_view.setColumnWidth(1, 100)  # TaxMap
-        self.table_view.setColumnWidth(3, 200)  # Owner
-        self.table_view.setColumnWidth(4, 200)  # Address
+        self.table_view.setColumnWidth(3, 150)  # Owner
+        self.table_view.setColumnWidth(4, 175)  # Address
         self.table_view.setColumnWidth(5, 100)  # Subdiv
         self.table_view.setColumnWidth(8, 50)  # Acres
         self.table_view.setColumnWidth(9, 50)  # Landuse
         self.table_view.setColumnWidth(11, 50)  # Bedrooms
         self.table_view.setColumnWidth(12, 50)  # Sq_ft
         self.table_view.setColumnWidth(13, 50)  # dpsf
-        self.table_view.setColumnWidth(17, 100)  # Appraised
-        self.table_view.setColumnWidth(19, 80)  # Sale Price
+        self.table_view.setColumnWidth(17, 75)  # Appraised
+        self.table_view.setColumnWidth(19, 75)  # Sale Price
         self.table_view.setColumnWidth(20, 80)  # Sale Date
         self.table_view.setColumnWidth(21, 50)  # lake %
-        self.table_view.setColumnWidth(25, 50)  # Dist1
-        self.table_view.setColumnWidth(31, 80)  # Amount Due
-        self.table_view.setColumnWidth(32, 250)  # Comments
+        self.table_view.setColumnWidth(25, 40)  # Dist1
+        self.table_view.setColumnWidth(31, 75)  # Amount Due
+        self.table_view.setColumnWidth(32, 175)  # Comments
         self.table_view.setColumnWidth(33, 50)  # Rating
-        self.table_view.setColumnWidth(34, 100)  # Bid
-        self.table_view.setColumnWidth(35, 100)  # Bid
+        self.table_view.setColumnWidth(34, 75)  # Bid
+        self.table_view.setColumnWidth(35, 75)  # Max Bid
+        self.table_view.setColumnWidth(36, 75)  # Est Bid
 
         pic_width = 300
         pic_height = int(pic_width * 2/3)
@@ -309,7 +314,7 @@ class MainWindow(QMainWindow, Ui_QMainWindow):
         # Call these to properly initialize the form - they won't get called if the default county is the first county
         # in the list as it won't trigger the "changed" signals
         self.set_btn_get_info_color(self.combo_county.currentText())
-        self.set_address_fields(self.combo_county.currentText())
+        # self.set_address_fields(self.combo_county.currentText())
 
         status_bar = QStatusBar()
         self.setStatusBar(status_bar)
@@ -374,6 +379,7 @@ class MainWindow(QMainWindow, Ui_QMainWindow):
     def show_gui(self):
         self.print_text('Starting gui...')
         props = self.read_props()
+        props = props.sort_values(by='item', ascending=True, ignore_index=True)
         props_gui = props[props['withdrawn'] == 'A']
         props_withdrawn = props[props['withdrawn'] == 'W']
         county = self.combo_county.currentText()
@@ -388,6 +394,7 @@ class MainWindow(QMainWindow, Ui_QMainWindow):
             self.print_text('Properties have been successfully saved')
 
     def close_window(self):
+        # This line is commented out b/c it causes issues on laptop
         self.write_init_file()
         self.close()
 

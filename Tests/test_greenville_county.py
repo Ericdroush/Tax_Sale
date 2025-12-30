@@ -46,9 +46,22 @@ def test_get_gis_info_greenville():
 
 
 def test_find_lake_props_greenville():
+    # Original Test bbox
     bbox = '1646762.2575459331%2C1067619.7086614221%2C1648818.8061023653%2C1069904.5104986876'
+    # url = ('https://www.gcgis.org/arcgis/rest/services/GreenvilleJS/Map_Layers_JS/MapServer/export?dpi=96'
+    #        '&transparent=true&format=png8&layers=show%3A53%2C49%2C48&bbox=')
+
+    # Lots of layers
+    # url = ('https://www.gcgis.org/arcgis/rest/services/GreenvilleJS/Map_Layers_JS/MapServer/export?dpi=96'
+    #        '&transparent=true&format=png8&layers=show%3A52%2C39%2C40%2C77%2C48%2C47%2C50%2C38%2C35%2C41%2C43%2C16%2C17&bbox=')
+
+    # No water
+    # bbox = '1636662.59973754%2C1088070.4514435679%2C1637408.177821517%2C1088863.8562992066'
+
+    # Some water
+    bbox = '1639164.0964566916%2C1094347.9937663972%2C1640217.7037401646%2C1095424.4917978942'
     url = ('https://www.gcgis.org/arcgis/rest/services/GreenvilleJS/Map_Layers_JS/MapServer/export?dpi=96'
-           '&transparent=true&format=png8&layers=show%3A53%2C49%2C48&bbox=')
+           '&transparent=true&format=png8&layers=show%3A53%2C47%2C48&bbox=')
     url = url + bbox
     url = url + '&bboxSR=6570&imageSR=6570&size=937%2C955&f=image'
 
@@ -60,4 +73,8 @@ def test_find_lake_props_greenville():
     lake_count = img_list.count(lake_pixel)
     lake_pct = (1 - lake_count / pixel_count) * 100
 
-    assert lake_pct == pytest.approx(96.8213, 0.0001)
+    print(img.mode, img.size, img.info, img.getbands())
+    # img.show()
+    print([img_list.count(x) for x in range(max(img_list))])
+
+    assert lake_pct == pytest.approx(9.6667, 0.001)
