@@ -101,6 +101,7 @@ def get_props(county, tm):
 
 
 def populate_fields(county, tm, prop, props, output):
+    print(output)
     attr = output['features'][0]['attributes']
     corners = pd.DataFrame(data=output['features'][0]['geometry']['rings'][0], columns=['x', 'y'])
     wkid = output['spatialReference']['latestWkid']
@@ -110,7 +111,7 @@ def populate_fields(county, tm, prop, props, output):
     if isinstance(address, str):  # Found address, NaN show up as float
         link_address = ('https://www.google.com/maps/place/' +
                         address.split()[0].replace('+', '%2B') + ',+' +
-                        address.split(',')[0].split()[1].replace(' ', '+') + ',+' +
+                        address.split(',')[0].split(maxsplit=1)[1].replace(' ', '+') + ',+' +
                         address.split(',')[1].strip())
     else:
         link_address = 'http://maps.google.com/maps?t=k&q=loc:' + str(lat) + '+' + str(lon)
@@ -146,7 +147,10 @@ def populate_fields(county, tm, prop, props, output):
         sq_ft = attr['SQFEET']
         appraised_total = attr['FAIRMKTVAL']
         sale_price = attr['SLPRICE']
-        sale_date = from_excel_serial(attr['DEEDDATE'] / 86400 / 1000 + 25569)
+        if isinstance(attr['DEEDDATE'], int):
+            sale_date = from_excel_serial(attr['DEEDDATE'] / 86400 / 1000 + 25569)
+        else:
+            sale_date = 'NaN'
         bldg_type = 'NaN'
         yr_built = 'NaN'
         appraised_land = 'NaN'
@@ -156,8 +160,10 @@ def populate_fields(county, tm, prop, props, output):
         # Calculated parameters
         dpsf = dpsf_calc(appraised_total, sq_ft)
 
-        if acres < 0.1:  # Only overwrite if acres wasn't defined
-            acres = polygon_area(corners)
+        calc_acres = polygon_area(corners)
+        if acres < 0.1 or abs(calc_acres - acres) > 0.05:  # Only overwrite if acres wasn't defined
+            acres = calc_acres
+            bldgs = -9  # Flag indicated that calculated acres is being used
 
         county_link = '=HYPERLINK("https://www.gcgis.org/apps/GreenvilleJS/?PIN=' + tm + '","County")'
 
@@ -245,11 +251,12 @@ def populate_fields(county, tm, prop, props, output):
 
     amount_due = float(props['amount_due'].iloc[prop].strip('$').replace(',', ''))
     # Ths logic is that I won't be too bummed about only earning 6% but would be more bummed by not being able to bid
-    max_bid = amount_due / 0.06  # This could have been set to amount_due / 0.12 to be more conservative
+    max_bid = round(amount_due / 0.06, 0)  # This could have been set to amount_due / 0.12 to be more conservative
+    est_bid = round(max(appraised_total, sale_price) * 0.80, 0)  # Based on past experience the bid is likely to go
     data_list = [props['item'].iloc[prop], tm, account, props['owner'].iloc[prop], address, subdiv, tax_dist,
                  bldgs, acres, landuse, bldg_type, bedrooms, sq_ft, dpsf, yr_built, appraised_land, appraised_bldg,
                  appraised_total, bldg_ratio, sale_price, sale_date, lake, bbox, lat, lon, dist1, dist2, dist3,
-                 withdrawn, county_link, map_link, amount_due, '', '', '', max_bid]
+                 withdrawn, county_link, map_link, amount_due, '', '', '', est_bid, max_bid]
 
     return data_list
 
@@ -285,7 +292,6 @@ def get_gis_info(self, county, filename, test_flag):
                 # print(tm)
 
                 output = get_props(county, tm)
-
                 prop_count += 1
                 t1 = time.perf_counter()
                 dt.append(t1 - t0)
@@ -346,7 +352,7 @@ def update_withdrawn(self, county, filename, test_flag):
 def lake_url(county, bbox):
     if county == 'greenville':
         url = ('https://www.gcgis.org/arcgis/rest/services/GreenvilleJS/Map_Layers_JS/MapServer/export?dpi=96'
-               '&transparent=true&format=png8&layers=show%3A53%2C49%2C48&bbox=')
+               '&transparent=true&format=png8&layers=show%3A53%2C47%2C48&bbox=')
         url = url + bbox
         return url + '&bboxSR=6570&imageSR=6570&size=937%2C955&f=image'
     elif county == 'anderson':
@@ -367,7 +373,8 @@ def county_pic_url(county, bbox):
         35      Lot numbers
         38      Railroad Tracks
         41      Street Names
-        47, 48  Water
+        47      Water - Large bodies of water
+        48      Water - Rivers
         49      Colored backgrounds
         50      Red former property lines
         52      Property lines
@@ -434,7 +441,7 @@ def find_lake_props(self, county, filename):
             t0 = t1
             est_time_left = sum(dt) / len(dt) * (total_count - count)
             self.print_text('Finding lake percentages for property {0}/{1}: Estimated time remaining = {2}s'
-                       .format(str(count), str(total_count), int(est_time_left)))
+                            .format(str(count), str(total_count), int(est_time_left)))
 
             if isinstance(bbox, float):  # NaN will be a float, expecting a string
                 lake_val.append('NaN')
@@ -478,4 +485,34 @@ def get_county_pictures(taxmap, county, bbox):
 
     # img.show()
 
+    return
+
+
+def filter_props():
+    """
+    This is a place to hold all the automatic filtering that I do that can be automated in the future
+    Filter                                            | Rating| Comment          | % in 2025 Data
+    -----------------------------------------------------------------------------------------------
+    acres < 0.1 and landuse in [1180, 6800, 9170]     |   0   | Too small        |  4.7%
+    est_bid > 150000                                  |   0   | Too expensive    | 25.8%
+    subdiv in ["Cliff", "Glassy"] and landuse = 1180  |   0   | Cliffs           |  1.5%
+    landuse in [130, 1170, 1171]                      |   0   | MH               |  9.6%
+    landuse in [1181, 205]                            |   0   | HOA              |  1.6%
+    landuse in [805]                                  |   0   | Cemetery!!!      |  0.0%
+    landuse in [1100, 1101, 9171] and est_bid < 30000 |   0   | Low price house  |  0.6%
+    _______________________________________________________________________________________________
+                                                                                 | 43.8%
+    What's left
+    _______________________________________________________________________________________________
+    Houses: landuse in [1100, 1101, 9171]                                        | 18.7%
+    Land: landuse in [1180, 6800, 9170]                                          | 35.3%
+    Other: [...,...]                                                             |  1.6%
+    _______________________________________________________________________________________________
+                                                                                 | 55.6%
+    Other filters to put in place...
+    -If previous owner is FLC or forfeited land commission - avoid these
+    -Look for HOA in owners name
+    """
+
+    pass
     return

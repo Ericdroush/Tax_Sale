@@ -54,6 +54,7 @@ def get_type():
         'comments': str,
         'rating': float,
         'bid': str,
+        'est_bid': float,
         'max_bid': float,
     }
     return type_dict
@@ -89,7 +90,7 @@ def dpsf_calc(appraised_total, sq_ft):
         return float('nan')
 
 
-def from_excel_serial(ordinal: float, _epoch0=datetime(1899, 12, 31)) -> datetime:
+def from_excel_serial(ordinal: float, _epoch0=datetime(1899, 12, 31)):
     if ordinal >= 60:
         ordinal -= 1  # Excel leap year bug, 1900 is not a leap year!
     return (_epoch0 + timedelta(days=ordinal)).replace(microsecond=0).strftime('%m/%d/%Y')
@@ -139,3 +140,40 @@ def run_query(url, params, verify=False):
     session.mount('https://', HTTPAdapter(max_retries=retries))
     return session.get(url, params=params, verify=verify)
 
+
+def merge_data():
+    """
+    This is a custom function to merge comments and rating generated in excel with the latest data from the tool
+
+    Saving csv from excel kills some of the columns (County and Map links specifically, and possibly others if you
+    don't select the option to not convert)
+
+    """
+    import pandas as pd
+    filename1 = '../Counties/Greenville/props.csv'
+    filename2 = '../Counties/Greenville/props3.csv'
+
+    props_from_tool = pd.read_csv(filename1, sep=',', dtype=get_type())
+    props_from_excel = pd.read_csv(filename2, sep=',', dtype=get_type())
+
+    # col = ['comments', 'rating', 'est_bid', 'max_bid']
+    col = ['comments', 'rating']
+
+    # Set the key column as index for both dataframes
+    props_from_tool.set_index('item', inplace=True)
+    props_from_excel.set_index('item', inplace=True)
+
+    # Overwrite the columns directly
+    props_from_tool.update(props_from_excel[col])
+
+    # Update function doesn't update if column doesn't exist
+    # props_from_tool['est_bid'] = props_from_excel['est_bid']
+
+    # Reset index if you want 'id' back as a column
+    props_from_tool.reset_index(inplace=True)
+
+    props_from_tool.to_csv(filename1, index=False, na_rep='NaN')
+
+
+if __name__ == '__main__':
+    merge_data()

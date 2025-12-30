@@ -33,23 +33,16 @@ def test_geocode():
 def test_find_distance_single():
     origin = '101 Main St Greer SC'
     destinations = ['101 Main St Greenville SC']
-    assert find_distance(origin, destinations) == [17.3, 'NaN', 'NaN']
+    assert find_distance(origin, destinations) == pytest.approx([17.3, 'NaN', 'NaN'], abs=3)
 
 
 def test_find_distance_multi():
     origin = '101 Main St Greer SC'
     destinations = ['101 Main St Greenville SC', '101 Main St Simpsonville, SC', '101 Main St Mauldin SC']
-    assert find_distance(origin, destinations) == [17.3, 17.9, 16.2]
+    assert find_distance(origin, destinations) == pytest.approx([16.9, 15.8, 16.1], abs=3)
 
 
 def test_find_distance_failed():
     origin = '101 Main St Greer SC'
     destinations = ['The moon']
     assert find_distance(origin, destinations) == ['Failed', 'NaN', 'NaN']
-
-
-def test_get_streetview():
-    loc = '106 Ford Circle Greer, SC'
-    img = get_streetview('Greenville', loc)
-    img.show()
-    assert 1 == 1

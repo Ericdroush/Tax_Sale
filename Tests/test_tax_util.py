@@ -22,6 +22,7 @@ def test_dpsf_calc_normal():
     appraised_total, sq_ft = 200000, 1000
     assert dpsf_calc(appraised_total, sq_ft) == 200
 
+
 @pytest.mark.parametrize(('appraised_total', 'sq_ft'), [(2000000, None), (2000000, 0)])
 def test_dpsf_calc_nan(appraised_total, sq_ft):
     assert dpsf_calc(appraised_total, sq_ft) == pytest.approx(float('nan'), nan_ok=True)
