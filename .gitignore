@@ -1,3 +1,10 @@
 # Project exclude paths
 /Archive/
 Utils/key.py
+Counties/Greenville/CountyView/*.png
+Counties/Greenville/MapView/
+Counties/Greenville/MapWideView/
+Counties/Greenville/StreetView/
+datafile*
+__pycache__
+.idea
