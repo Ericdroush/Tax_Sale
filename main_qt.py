@@ -518,9 +518,10 @@ class MainWindow(QMainWindow, Ui_QMainWindow):
             bbox = row['bbox']
             taxmap = row['taxmap']
             loc = row['address']
+            corners = row['corners']
 
             if isinstance(bbox, str):  # NaN will be a float, expecting a string
-                get_county_pictures(taxmap, current_county, bbox)
+                get_county_pictures(taxmap, current_county, corners)
 
             get_mapview(taxmap, current_county, loc)
             get_streetview(taxmap, current_county, loc)

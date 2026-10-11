@@ -1,0 +1,117 @@
+import pandas as pd
+from tax_util import get_type
+
+
+def print_prop_summary(count_new, count_old, total_props, label):
+    print(count_old-count_new, 'after', label, 'filtering', round((count_old-count_new)/total_props*100,1), "%")
+    return count_new
+
+
+def filter_props(df):
+    """
+    This is a place to hold all the automatic filtering that I do that can be automated in the future
+    Filter                                            | Rating| Comment          | % in 2025 Data
+    -----------------------------------------------------------------------------------------------
+    acres < 0.075 and landuse in [1180, 6800, 9170]   |   0   | Too small        |  4.7%
+    est_bid > 150000                                  |   0   | Too expensive    | 25.8%
+    subdiv in ["Cliff", "Glassy"] and landuse = 1180  |   0   | Cliffs           |  1.5%
+    landuse in [130, 1170, 1171]                      |   0   | MH               |  9.6%
+    landuse in [1181, 205]                            |   0   | HOA              |  1.6%
+    landuse in [805]                                  |   0   | Cemetery!!!      |  0.0%
+    landuse in [1100, 1101, 9171] and est_bid < 30000 |   0   | Low price house  |  0.6%
+    _______________________________________________________________________________________________
+                                                                                 | 43.8%
+    What's left
+    _______________________________________________________________________________________________
+    Houses: landuse in [1100, 1101, 9171]                                        | 18.7%
+    Land: landuse in [1180, 6800, 9170]                                          | 35.3%
+    Other: [...,...]                                                             |  1.6%
+    _______________________________________________________________________________________________
+                                                                                 | 55.6%
+    Other filters to put in place...
+    -If previous owner is FLC or forfeited land commission - avoid these
+        -I don't currently track previous owner but could add it
+    -Look for 'HOA' in owners name
+
+    """
+    total_props = len(df)
+    filterted_props_old = total_props
+    print(total_props, "before filtering")
+    df['training_filter'] = True
+    # Filter out small lots in specific landuse categories
+    df.loc[
+        (df['acres'] < 0.075) &
+        (df['land_use'].isin([1180, 6800, 9170])),
+        'training_filter'
+    ] = False
+    filterted_props_old = print_prop_summary(len(df.loc[df['training_filter']]), filterted_props_old, total_props,
+                                              'small land')
+
+    # Filter out very high estimated bid properties
+    df.loc[
+        (df['est_bid'] > 150000),
+        'training_filter'
+    ] = False
+    filterted_props_old = print_prop_summary(len(df.loc[df['training_filter']]), filterted_props_old, total_props,
+                                              'high est_bid')
+    
+    # Filter out specific subdivisions known to be problematic
+    df.loc[
+        (df['subdiv'].str.contains('Cliff', case=False, na=False) | df['subdiv'].str.contains('Glassy', case=False, na=False)) &
+        (df['land_use'] == 1180),
+        'training_filter'
+    ] = False
+    filterted_props_old = print_prop_summary(len(df.loc[df['training_filter']]), filterted_props_old, total_props,
+                                              'Cliffs/Glassy')
+
+    # Filter out mobile homes
+    df.loc[
+        (df['land_use'].isin([130, 1170, 1171])),
+        'training_filter'
+    ] = False
+    filterted_props_old = print_prop_summary(len(df.loc[df['training_filter']]), filterted_props_old, total_props,
+                                              'MH')
+
+    # Filter out properties with HOA - either by ownership or landuse
+    df.loc[
+        (df['land_use'].isin([1181, 205])),
+        'training_filter'
+    ] = False
+    df.loc[
+        df['owner'].str.contains('HOA', na=False, case=False),
+        'training_filter'
+    ] = False
+    filterted_props_old = print_prop_summary(len(df.loc[df['training_filter']]), filterted_props_old, total_props,
+                                              'HOA')
+
+    # Filter out cemeteries
+    df.loc[
+        (df['land_use'].isin([805])),
+        'training_filter'
+    ] = False
+    filterted_props_old = print_prop_summary(len(df.loc[df['training_filter']]), filterted_props_old, total_props,
+                                              'Creepy Cemeteries')
+
+    # Filter out very low estimated bid houses
+    df.loc[
+        (df['land_use'].isin([1100, 1101, 9171])) &
+        (df['est_bid'] < 30000),
+        'training_filter'
+    ] = False
+    filterted_props_old = print_prop_summary(len(df.loc[df['training_filter']]), filterted_props_old, total_props,
+                                              'Low Price Houses')
+
+    return df.loc[df['training_filter']].drop(columns=['training_filter'])
+
+
+if __name__ == '__main__':
+
+    df = pd.read_csv('Counties/Greenville/props.csv', dtype=get_type())
+    # Read bid as a string, but convert to a number - more forgiving than
+    df['bid'] = pd.to_numeric(df['bid'].str.replace(',', ''), errors='coerce')  
+    print("Before filtering:", len(df))
+    df = filter_props(df)
+    print("After filtering:", len(df))
+
+    df.to_csv('Image_Training/props_screened.csv', index=False, na_rep='NaN')
+    

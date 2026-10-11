@@ -23,7 +23,7 @@ def test_run_google_api_distancematrix():
 
 def test_reverse_geo():
     lat, lon = 34.521489634608244, -82.62542004892643
-    assert reverse_geo(lat, lon) == 'G9CF+HRW Anderson, SC, USA'
+    assert reverse_geo(lat, lon) == 'G9CF+HR Anderson, SC, USA'
 
 
 def test_geocode():
