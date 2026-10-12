@@ -29,8 +29,9 @@ from Utils.google_util import find_distance
 from Utils.tax_util import *
 from Utils.gis_utils.county_driver import *
 from PyQt6 import QtWidgets, QtCore
-from PyQt6.QtCore import Qt, QAbstractTableModel, QUrl
+from PyQt6.QtCore import Qt, QAbstractTableModel, QUrl, QSortFilterProxyModel
 from PyQt6.QtWidgets import QApplication, QMainWindow, QStatusBar, QDialog, QTableView, QVBoxLayout
+from PyQt6.QtWidgets import QComboBox, QLineEdit
 from PyQt6.QtWidgets import QLabel, QWidget, QHBoxLayout, QDialogButtonBox, QStyledItemDelegate, QStyle, QStyleOption
 # from PyQt6.QtWebEngineWidgets import QWebEngineView
 from PyQt6.QtGui import QPixmap, QPainter, QPen, QBrush, QColor, QFont
@@ -61,9 +62,9 @@ class PandasModel(QAbstractTableModel):
                     value = str(value)
 
                 return value
-            if role == Qt.ItemDataRole.BackgroundRole:
-                if index.row() % 2 == 0:
-                    return QBrush(QColor(235, 235, 235))
+            if role == Qt.ItemDataRole.UserRole:  # Raw value used for sorting
+                value = self._data.iloc[index.row(), index.column()]
+                return value.item() if hasattr(value, 'item') else value
             # if role == Qt.ItemDataRole.BackgroundRole:
             #     print(1)
             #     return QBrush()
@@ -101,6 +102,43 @@ class PandasModel(QAbstractTableModel):
         self.layoutChanged.emit()
 
 
+class SortFilterProxy(QSortFilterProxyModel):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setSortRole(Qt.ItemDataRole.UserRole)
+        self.setFilterRole(Qt.ItemDataRole.DisplayRole)
+        self.setFilterCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+        self._text = ''
+        self._columns = []
+
+    def set_all_columns_filter(self, text, columns):
+        self._text = text.strip().lower()
+        self._columns = columns
+        self.invalidateFilter()
+
+    def filterAcceptsRow(self, source_row, source_parent):
+        if not self._text:
+            return True
+        model = self.sourceModel()
+        for col in self._columns:
+            value = model.data(model.index(source_row, col, source_parent), Qt.ItemDataRole.DisplayRole)
+            if value is not None and self._text in value.lower():
+                return True
+        return False
+
+    def lessThan(self, left, right):
+        l_val = left.data(Qt.ItemDataRole.UserRole)
+        r_val = right.data(Qt.ItemDataRole.UserRole)
+        l_null = l_val is None or pd.isna(l_val)
+        r_null = r_val is None or pd.isna(r_val)
+        if l_null or r_null:
+            return l_null and not r_null  # Nulls sort as smallest
+        try:
+            return l_val < r_val
+        except TypeError:
+            return str(l_val) < str(r_val)
+
+
 class CustomDialog(QDialog):
     def __init__(self, county, props, parent=None, *args, **kwargs):
         super().__init__(parent, *args, **kwargs)
@@ -110,9 +148,14 @@ class CustomDialog(QDialog):
 
         self.table_view = QTableView()
         self.model = PandasModel(props)
-        self.table_view.setModel(self.model)
-        self.table_view.setSortingEnabled(False)
-        self.table_view.setStyleSheet("QTableView::item:selected{background:rgb(12, 128, 220)}")
+        self.proxy = SortFilterProxy(self)
+        self.proxy.setSourceModel(self.model)
+        self.table_view.setModel(self.proxy)
+        self.table_view.setSortingEnabled(True)
+        self.table_view.horizontalHeader().setSortIndicator(-1, Qt.SortOrder.AscendingOrder)
+        self.table_view.setAlternatingRowColors(True)
+        self.table_view.setStyleSheet("QTableView{alternate-background-color: rgb(235, 235, 235);}"
+                                      "QTableView::item:selected{background:rgb(12, 128, 220)}")
 
         col_index = {name: i for i, name in enumerate(props.columns)}
 
@@ -125,6 +168,23 @@ class CustomDialog(QDialog):
 
         for name in hidden_cols:
             self.table_view.hideColumn(col_index[name])
+
+        # Filter bar: pick a column (or all visible columns) and type text to filter rows
+        self.filter_combo = QComboBox()
+        self.filter_combo.addItem('All columns', -1)
+        for name, i in col_index.items():
+            if name not in hidden_cols:
+                self.filter_combo.addItem(str(name), i)
+        self.filter_edit = QLineEdit()
+        self.filter_edit.setPlaceholderText('Filter rows...')
+        self.filter_edit.setClearButtonEnabled(True)
+        self.filter_edit.textChanged.connect(self.apply_filter)
+        self.filter_combo.currentIndexChanged.connect(self.apply_filter)
+        self.h_layout_filter = QHBoxLayout()
+        self.h_layout_filter.addWidget(QLabel('Filter:'))
+        self.h_layout_filter.addWidget(self.filter_combo)
+        self.h_layout_filter.addWidget(self.filter_edit, 1)
+        self.hidden_col_idx = [col_index[name] for name in hidden_cols]
 
         col_widths = {
             'item': 50,
@@ -217,6 +277,7 @@ class CustomDialog(QDialog):
         self.buttonBox.accepted.connect(self.accept)
         self.buttonBox.rejected.connect(self.reject)
 
+        self.v_layout.addLayout(self.h_layout_filter)
         self.v_layout.addLayout(self.h_layout_table)
         self.v_layout.addLayout(self.h_layout_photos)
         self.v_layout.addLayout(self.h_layout_captions)
@@ -225,6 +286,16 @@ class CustomDialog(QDialog):
         self.v_layout.setSpacing(20)
 
         self.setLayout(self.v_layout)
+
+    def apply_filter(self, *_):
+        text = self.filter_edit.text()
+        column = self.filter_combo.currentData()
+        if column == -1:
+            # Match any visible column
+            visible = [c for c in range(self.model.columnCount()) if c not in self.hidden_col_idx]
+            self.proxy.set_all_columns_filter(text, visible)
+        else:
+            self.proxy.set_all_columns_filter(text, [column])
 
     def update_pictures(self, county):
         indexes = self.table_view.selectedIndexes()
