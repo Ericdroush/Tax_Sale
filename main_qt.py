@@ -114,36 +114,45 @@ class CustomDialog(QDialog):
         self.table_view.setSortingEnabled(False)
         self.table_view.setStyleSheet("QTableView::item:selected{background:rgb(12, 128, 220)}")
 
-        hidden_cols = [2, 6, 7, 10, 22, 23, 24, 28, 29, 30]  # Base hidden columns
-        hidden_cols.extend([14, 15, 16, 18, 26, 27])
+        col_index = {name: i for i, name in enumerate(props.columns)}
+
+        hidden_cols = ['account', 'tax_dist', 'bldgs', 'bldg_type', 'bbox', 'corners', 'lat', 'long',
+                       'withdrawn', 'county_link', 'map_link']  # Base hidden columns
+        hidden_cols.extend(['yr_built', 'appraised_land', 'appraised_bldg', 'bldg_ratio'])
 
         # Extra hidden columns for laptop
-        hidden_cols.extend([11, 12, 13, 21])
+        hidden_cols.extend(['bedrooms', 'sq_ft', 'dpsf', 'lake%'])
 
-        for col in hidden_cols:
-            self.table_view.hideColumn(col)
+        for name in hidden_cols:
+            self.table_view.hideColumn(col_index[name])
 
-        self.table_view.setColumnWidth(0, 50)  # Item
-        self.table_view.setColumnWidth(1, 100)  # TaxMap
-        self.table_view.setColumnWidth(3, 150)  # Owner
-        self.table_view.setColumnWidth(4, 175)  # Address
-        self.table_view.setColumnWidth(5, 100)  # Subdiv
-        self.table_view.setColumnWidth(8, 50)  # Acres
-        self.table_view.setColumnWidth(9, 50)  # Landuse
-        self.table_view.setColumnWidth(11, 50)  # Bedrooms
-        self.table_view.setColumnWidth(12, 50)  # Sq_ft
-        self.table_view.setColumnWidth(13, 50)  # dpsf
-        self.table_view.setColumnWidth(17, 75)  # Appraised
-        self.table_view.setColumnWidth(19, 75)  # Sale Price
-        self.table_view.setColumnWidth(20, 80)  # Sale Date
-        self.table_view.setColumnWidth(21, 50)  # lake %
-        self.table_view.setColumnWidth(25, 40)  # Dist1
-        self.table_view.setColumnWidth(31, 75)  # Amount Due
-        self.table_view.setColumnWidth(32, 175)  # Comments
-        self.table_view.setColumnWidth(33, 50)  # Rating
-        self.table_view.setColumnWidth(34, 75)  # Bid
-        self.table_view.setColumnWidth(35, 75)  # Max Bid
-        self.table_view.setColumnWidth(36, 75)  # Est Bid
+        col_widths = {
+            'item': 50,
+            'taxmap': 100,
+            'owner': 150,
+            'address': 175,
+            'subdiv': 100,
+            'acres': 50,
+            'land_use': 50,
+            'bedrooms': 50,
+            'sq_ft': 50,
+            'dpsf': 50,
+            'appraised_total': 75,
+            'sale_price': 75,
+            'sale_date': 80,
+            'lake%': 50,
+            'dist1': 40,
+            'dist2': 40,
+            'dist3': 40,
+            'amount_due': 75,
+            'comments': 175,
+            'rating': 50,
+            'bid': 75,
+            'max_bid': 75,
+            'est_bid': 75,
+        }
+        for name, width in col_widths.items():
+            self.table_view.setColumnWidth(col_index[name], width)
 
         pic_width = 300
         pic_height = int(pic_width * 2/3)
@@ -195,7 +204,7 @@ class CustomDialog(QDialog):
         self.label2.setOpenExternalLinks(True)
         self.h_layout_captions.addWidget(self.label2)
 
-        url_link = '<a href="https://www.gcgis.org/apps/GreenvilleJS/">GCGIS</a>'
+        url_link = '<a href="https://www.gcgis.org/apps/GreenvilleNJ/">GCGIS</a>'
         self.label3 = QLabel(self)
         self.label3.setText(url_link)
         self.label3.setOpenExternalLinks(True)
@@ -263,7 +272,7 @@ class CustomDialog(QDialog):
         self.painter_instance.drawEllipse(300, 200, 10, 10)
         self.painter_instance.end()
         self.image_label3.setPixmap(pixmap.scaled(pic_width, pic_height))
-        url_link = '<a href="https://www.gcgis.org/apps/GreenvilleJS/?PIN=' + tax_map + '">GCGIS</a>'
+        url_link = '<a href="https://www.gcgis.org/apps/GreenvilleNJ/?PIN=' + tax_map + '">GCGIS</a>'
         self.label3.setText(url_link)
 
         return

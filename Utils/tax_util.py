@@ -62,6 +62,20 @@ def get_type():
     return type_dict
 
 
+def get_defaults():
+    # Default fill value for each column, based on the type declared in get_type()
+    # int can't hold NaN so it gets 0, float gets NaN, everything else (str) gets 'NaN'
+    defaults = {}
+    for col, col_type in get_type().items():
+        if col_type is int:
+            defaults[col] = 0
+        elif col_type is float:
+            defaults[col] = float('nan')
+        else:
+            defaults[col] = 'NaN'
+    return defaults
+
+
 def geo_convert(lat, lon, wkid):
     from pyproj import Transformer
     # EPSG:4326 is equivalent to WGS84 which gives standard lat/lon
@@ -118,7 +132,7 @@ def polygon_area(points):
         area += (points['x'].iloc[j] + points['x'].iloc[i]) * (points['y'].iloc[j] - points['y'].iloc[i])
         j = i  # j is the previous vertex to i
 
-    return area / 2 / 43560
+    return round(area / 2 / 43560, 2)  # Round to 2 decimal places
 
 
 def corners_to_text(corners):
