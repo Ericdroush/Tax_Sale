@@ -9,3 +9,4 @@ datafile*
 __pycache__
 .idea
 Image_Screening/data
+property_scorer*.pt
