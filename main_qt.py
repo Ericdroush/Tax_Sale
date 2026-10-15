@@ -108,23 +108,23 @@ class SortFilterProxy(QSortFilterProxyModel):
         self.setSortRole(Qt.ItemDataRole.UserRole)
         self.setFilterRole(Qt.ItemDataRole.DisplayRole)
         self.setFilterCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
-        self._text = ''
-        self._columns = []
+        self._filters = []
 
-    def set_all_columns_filter(self, text, columns):
-        self._text = text.strip().lower()
-        self._columns = columns
+    def set_filters(self, filters):
+        """filters: list of (text, columns); a row must match every non-empty filter."""
+        self._filters = [(text.strip().lower(), columns) for text, columns in filters if text.strip()]
         self.invalidateFilter()
 
     def filterAcceptsRow(self, source_row, source_parent):
-        if not self._text:
-            return True
         model = self.sourceModel()
-        for col in self._columns:
-            value = model.data(model.index(source_row, col, source_parent), Qt.ItemDataRole.DisplayRole)
-            if value is not None and self._text in value.lower():
-                return True
-        return False
+        for text, columns in self._filters:
+            for col in columns:
+                value = model.data(model.index(source_row, col, source_parent), Qt.ItemDataRole.DisplayRole)
+                if value is not None and text in value.lower():
+                    break
+            else:
+                return False
+        return True
 
     def lessThan(self, left, right):
         l_val = left.data(Qt.ItemDataRole.UserRole)
@@ -169,21 +169,29 @@ class CustomDialog(QDialog):
         for name in hidden_cols:
             self.table_view.hideColumn(col_index[name])
 
-        # Filter bar: pick a column (or all visible columns) and type text to filter rows
-        self.filter_combo = QComboBox()
-        self.filter_combo.addItem('All columns', -1)
-        for name, i in col_index.items():
-            if name not in hidden_cols:
-                self.filter_combo.addItem(str(name), i)
-        self.filter_edit = QLineEdit()
-        self.filter_edit.setPlaceholderText('Filter rows...')
-        self.filter_edit.setClearButtonEnabled(True)
-        self.filter_edit.textChanged.connect(self.apply_filter)
-        self.filter_combo.currentIndexChanged.connect(self.apply_filter)
+        # Filter bar: up to three filters, each picks a column (or all visible columns) and text.
+        # Rows must match every filter that has text; empty filters are ignored.
+        self.filter_rows = []
         self.h_layout_filter = QHBoxLayout()
         self.h_layout_filter.addWidget(QLabel('Filter:'))
-        self.h_layout_filter.addWidget(self.filter_combo)
-        self.h_layout_filter.addWidget(self.filter_edit, 1)
+        for n in range(3):
+            combo = QComboBox()
+            combo.addItem('All columns', -1)
+            for name, i in col_index.items():
+                if name not in hidden_cols:
+                    combo.addItem(str(name), i)
+            edit = QLineEdit()
+            edit.setPlaceholderText(f'Filter {n + 1}...')
+            edit.setClearButtonEnabled(True)
+            edit.textChanged.connect(self.apply_filter)
+            combo.currentIndexChanged.connect(self.apply_filter)
+            self.filter_rows.append((combo, edit))
+            self.h_layout_filter.addWidget(combo)
+            self.h_layout_filter.addWidget(edit, 1)
+        self.count_label = QLabel()
+        self.h_layout_filter.addWidget(self.count_label)
+        self.hidden_col_idx = [col_index[name] for name in hidden_cols]
+        self.update_count()
         self.hidden_col_idx = [col_index[name] for name in hidden_cols]
 
         col_widths = {
@@ -288,14 +296,16 @@ class CustomDialog(QDialog):
         self.setLayout(self.v_layout)
 
     def apply_filter(self, *_):
-        text = self.filter_edit.text()
-        column = self.filter_combo.currentData()
-        if column == -1:
-            # Match any visible column
-            visible = [c for c in range(self.model.columnCount()) if c not in self.hidden_col_idx]
-            self.proxy.set_all_columns_filter(text, visible)
-        else:
-            self.proxy.set_all_columns_filter(text, [column])
+        visible = [c for c in range(self.model.columnCount()) if c not in self.hidden_col_idx]
+        filters = []
+        for combo, edit in self.filter_rows:
+            column = combo.currentData()
+            filters.append((edit.text(), visible if column == -1 else [column]))
+        self.proxy.set_filters(filters)
+        self.update_count()
+
+    def update_count(self):
+        self.count_label.setText(f'Properties shown: {self.proxy.rowCount()} of {self.model.rowCount()}')
 
     def update_pictures(self, county):
         indexes = self.table_view.selectedIndexes()

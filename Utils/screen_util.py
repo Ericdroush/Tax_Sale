@@ -23,8 +23,8 @@ def filter_props(df, training=True):
     -----------------------------------------------------------------------------------------------
     acres < 0.075 and landuse in [1180, 6800, 9170]   |   0   | Too small        |  4.7%
     est_bid > 150000                                  |   0   | Too expensive    | 25.8%
-    subdiv in ["Cliff", "Glassy"] and landuse = 1180  |   0   | Cliffs           |  1.5%
-    landuse in [130, 1170]                            |   0   | MH               |  9.6%
+    subdiv|address in ["Cliff", "Glassy"], landuse=1180 |   0   | Cliffs           |  1.5%
+    landuse in [130, 1171]                            |   0   | MH               |  9.6%
     landuse in [1181, 205]                            |   0   | HOA              |  1.6%
     landuse in [805]                                  |   0   | Cemetery!!!      |  0.0%
     landuse in [1100, 1101, 9171] and est_bid < 30000 |   0   | Low price house  |  0.6%
@@ -58,17 +58,17 @@ def filter_props(df, training=True):
     filterted_props_old = print_prop_summary(len(df.loc[df['training_filter']]), filterted_props_old, total_props,
                                               'high est bid')
 
-    # Filter out specific subdivisions known to be problematic
-    mark_screened(
-        df,
-        (df['subdiv'].str.contains('Cliff', case=False, na=False) | df['subdiv'].str.contains('Glassy', case=False, na=False)) &
-        (df['land_use'] == 1180),
-        'Cliffs')
+    # Filter out specific subdivisions known to be problematic - the keyword may be in subdiv or address
+    cliff_mask = pd.Series(False, index=df.index)
+    for column in ['subdiv', 'address']:
+        for keyword in ['Cliff', 'Glassy']:
+            cliff_mask |= df[column].str.contains(keyword, case=False, na=False)
+    mark_screened(df, cliff_mask & (df['land_use'] == 1180), 'Cliffs')
     filterted_props_old = print_prop_summary(len(df.loc[df['training_filter']]), filterted_props_old, total_props,
                                               'Cliffs/Glassy')
 
     # Filter out mobile homes
-    mark_screened(df, df['land_use'].isin([130, 1170]), 'MH')
+    mark_screened(df, df['land_use'].isin([130, 1171]), 'MH')
     filterted_props_old = print_prop_summary(len(df.loc[df['training_filter']]), filterted_props_old, total_props,
                                               'MH')
 
@@ -104,8 +104,11 @@ if __name__ == '__main__':
     # df = filter_props(df, training=training)
 
     mask = df['land_use'].isin([1171])
-    df.loc[mask, 'rating'] = float('nan')
-    df.loc[mask, 'comments'] = 'NaN'
+    df.loc[mask, 'rating'] = -1.0
+    df.loc[mask, 'comments'] = 'MH'
+
+    # df.loc[mask, 'rating'] = float('nan')
+    # df.loc[mask, 'comments'] = 'NaN'
 
     if training:
         df.to_csv('Image_Training/props_screened.csv', index=False, na_rep='NaN')
