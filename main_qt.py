@@ -29,8 +29,9 @@ from Utils.google_util import find_distance
 from Utils.tax_util import *
 from Utils.gis_utils.county_driver import *
 from PyQt6 import QtWidgets, QtCore
-from PyQt6.QtCore import Qt, QAbstractTableModel, QUrl
+from PyQt6.QtCore import Qt, QAbstractTableModel, QUrl, QSortFilterProxyModel
 from PyQt6.QtWidgets import QApplication, QMainWindow, QStatusBar, QDialog, QTableView, QVBoxLayout
+from PyQt6.QtWidgets import QComboBox, QLineEdit
 from PyQt6.QtWidgets import QLabel, QWidget, QHBoxLayout, QDialogButtonBox, QStyledItemDelegate, QStyle, QStyleOption
 # from PyQt6.QtWebEngineWidgets import QWebEngineView
 from PyQt6.QtGui import QPixmap, QPainter, QPen, QBrush, QColor, QFont
@@ -38,6 +39,8 @@ from qt_ui import Ui_QMainWindow
 
 
 class PandasModel(QAbstractTableModel):
+    editable_columns = ('comments', 'rating')  # All other columns are read-only (still selectable)
+
     def __init__(self, data):
         super().__init__()
         self._data = data
@@ -61,9 +64,9 @@ class PandasModel(QAbstractTableModel):
                     value = str(value)
 
                 return value
-            if role == Qt.ItemDataRole.BackgroundRole:
-                if index.row() % 2 == 0:
-                    return QBrush(QColor(235, 235, 235))
+            if role == Qt.ItemDataRole.UserRole:  # Raw value used for sorting
+                value = self._data.iloc[index.row(), index.column()]
+                return value.item() if hasattr(value, 'item') else value
             # if role == Qt.ItemDataRole.BackgroundRole:
             #     print(1)
             #     return QBrush()
@@ -85,7 +88,10 @@ class PandasModel(QAbstractTableModel):
         return False
 
     def flags(self, index):
-        return Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable | Qt.ItemFlag.ItemIsEditable
+        flags = Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable
+        if index.isValid() and self._data.columns[index.column()] in self.editable_columns:
+            flags |= Qt.ItemFlag.ItemIsEditable
+        return flags
 
     def headerData(self, section, orientation, role=Qt.ItemDataRole.DisplayRole):
         if role == Qt.ItemDataRole.DisplayRole:
@@ -101,49 +107,126 @@ class PandasModel(QAbstractTableModel):
         self.layoutChanged.emit()
 
 
+class SortFilterProxy(QSortFilterProxyModel):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setSortRole(Qt.ItemDataRole.UserRole)
+        self.setFilterRole(Qt.ItemDataRole.DisplayRole)
+        self.setFilterCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+        self._filters = []
+
+    def set_filters(self, filters):
+        """filters: list of (text, columns); a row must match every non-empty filter."""
+        self._filters = [(text.strip().lower(), columns) for text, columns in filters if text.strip()]
+        self.invalidateFilter()
+
+    def filterAcceptsRow(self, source_row, source_parent):
+        model = self.sourceModel()
+        for text, columns in self._filters:
+            for col in columns:
+                value = model.data(model.index(source_row, col, source_parent), Qt.ItemDataRole.DisplayRole)
+                if value is not None and text in value.lower():
+                    break
+            else:
+                return False
+        return True
+
+    def lessThan(self, left, right):
+        l_val = left.data(Qt.ItemDataRole.UserRole)
+        r_val = right.data(Qt.ItemDataRole.UserRole)
+        l_null = l_val is None or pd.isna(l_val)
+        r_null = r_val is None or pd.isna(r_val)
+        if l_null or r_null:
+            return l_null and not r_null  # Nulls sort as smallest
+        try:
+            return l_val < r_val
+        except TypeError:
+            return str(l_val) < str(r_val)
+
+
 class CustomDialog(QDialog):
-    def __init__(self, county, props, parent=None, *args, **kwargs):
+    def __init__(self, county, props, parent=None, *args, save_callback=None, **kwargs):
         super().__init__(parent, *args, **kwargs)
+        self.save_callback = save_callback
 
         self.setWindowTitle("County Property Detail Viewer")
         self.setWindowFlags(self.windowFlags() | Qt.WindowType.WindowMaximizeButtonHint)
 
         self.table_view = QTableView()
         self.model = PandasModel(props)
-        self.table_view.setModel(self.model)
-        self.table_view.setSortingEnabled(False)
-        self.table_view.setStyleSheet("QTableView::item:selected{background:rgb(12, 128, 220)}")
+        self.proxy = SortFilterProxy(self)
+        self.proxy.setSourceModel(self.model)
+        self.table_view.setModel(self.proxy)
+        self.table_view.setSortingEnabled(True)
+        self.table_view.horizontalHeader().setSortIndicator(-1, Qt.SortOrder.AscendingOrder)
+        self.table_view.setAlternatingRowColors(True)
+        self.table_view.setStyleSheet("QTableView{alternate-background-color: rgb(235, 235, 235);}"
+                                      "QTableView::item:selected{background:rgb(12, 128, 220)}")
 
-        hidden_cols = [2, 6, 7, 10, 22, 23, 24, 28, 29, 30]  # Base hidden columns
-        hidden_cols.extend([14, 15, 16, 18, 26, 27])
+        col_index = {name: i for i, name in enumerate(props.columns)}
+
+        hidden_cols = ['account', 'tax_dist', 'bldgs', 'bldg_type', 'bbox', 'corners', 'lat', 'long',
+                       'withdrawn', 'county_link', 'map_link']  # Base hidden columns
+        hidden_cols.extend(['yr_built', 'appraised_land', 'appraised_bldg', 'bldg_ratio'])
 
         # Extra hidden columns for laptop
-        hidden_cols.extend([11, 12, 13, 21])
+        hidden_cols.extend(['bedrooms', 'sq_ft', 'dpsf', 'lake%'])
 
-        for col in hidden_cols:
-            self.table_view.hideColumn(col)
+        for name in hidden_cols:
+            self.table_view.hideColumn(col_index[name])
 
-        self.table_view.setColumnWidth(0, 50)  # Item
-        self.table_view.setColumnWidth(1, 100)  # TaxMap
-        self.table_view.setColumnWidth(3, 150)  # Owner
-        self.table_view.setColumnWidth(4, 175)  # Address
-        self.table_view.setColumnWidth(5, 100)  # Subdiv
-        self.table_view.setColumnWidth(8, 50)  # Acres
-        self.table_view.setColumnWidth(9, 50)  # Landuse
-        self.table_view.setColumnWidth(11, 50)  # Bedrooms
-        self.table_view.setColumnWidth(12, 50)  # Sq_ft
-        self.table_view.setColumnWidth(13, 50)  # dpsf
-        self.table_view.setColumnWidth(17, 75)  # Appraised
-        self.table_view.setColumnWidth(19, 75)  # Sale Price
-        self.table_view.setColumnWidth(20, 80)  # Sale Date
-        self.table_view.setColumnWidth(21, 50)  # lake %
-        self.table_view.setColumnWidth(25, 40)  # Dist1
-        self.table_view.setColumnWidth(31, 75)  # Amount Due
-        self.table_view.setColumnWidth(32, 175)  # Comments
-        self.table_view.setColumnWidth(33, 50)  # Rating
-        self.table_view.setColumnWidth(34, 75)  # Bid
-        self.table_view.setColumnWidth(35, 75)  # Max Bid
-        self.table_view.setColumnWidth(36, 75)  # Est Bid
+        # Filter bar: up to three filters, each picks a column (or all visible columns) and text.
+        # Rows must match every filter that has text; empty filters are ignored.
+        self.filter_rows = []
+        self.h_layout_filter = QHBoxLayout()
+        self.h_layout_filter.addWidget(QLabel('Filter:'))
+        for n in range(3):
+            combo = QComboBox()
+            combo.addItem('All columns', -1)
+            for name, i in col_index.items():
+                if name not in hidden_cols:
+                    combo.addItem(str(name), i)
+            edit = QLineEdit()
+            edit.setPlaceholderText(f'Filter {n + 1}...')
+            edit.setClearButtonEnabled(True)
+            edit.textChanged.connect(self.apply_filter)
+            combo.currentIndexChanged.connect(self.apply_filter)
+            self.filter_rows.append((combo, edit))
+            self.h_layout_filter.addWidget(combo)
+            self.h_layout_filter.addWidget(edit, 1)
+        self.count_label = QLabel()
+        self.h_layout_filter.addWidget(self.count_label)
+        self.hidden_col_idx = [col_index[name] for name in hidden_cols]
+        self.update_count()
+        self.hidden_col_idx = [col_index[name] for name in hidden_cols]
+
+        col_widths = {
+            'item': 50,
+            'taxmap': 100,
+            'owner': 150,
+            'address': 175,
+            'subdiv': 100,
+            'acres': 50,
+            'land_use': 50,
+            'bedrooms': 50,
+            'sq_ft': 50,
+            'dpsf': 50,
+            'appraised_total': 75,
+            'sale_price': 75,
+            'sale_date': 80,
+            'lake%': 50,
+            'dist1': 40,
+            'dist2': 40,
+            'dist3': 40,
+            'amount_due': 75,
+            'comments': 175,
+            'rating': 50,
+            'bid': 75,
+            'max_bid': 75,
+            'est_bid': 75,
+        }
+        for name, width in col_widths.items():
+            self.table_view.setColumnWidth(col_index[name], width)
 
         pic_width = 300
         pic_height = int(pic_width * 2/3)
@@ -195,7 +278,7 @@ class CustomDialog(QDialog):
         self.label2.setOpenExternalLinks(True)
         self.h_layout_captions.addWidget(self.label2)
 
-        url_link = '<a href="https://www.gcgis.org/apps/GreenvilleJS/">GCGIS</a>'
+        url_link = '<a href="https://www.gcgis.org/apps/GreenvilleNJ/">GCGIS</a>'
         self.label3 = QLabel(self)
         self.label3.setText(url_link)
         self.label3.setOpenExternalLinks(True)
@@ -205,9 +288,11 @@ class CustomDialog(QDialog):
         q_btn = (QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Close)
 
         self.buttonBox = QDialogButtonBox(q_btn)
-        self.buttonBox.accepted.connect(self.accept)
+        # Save writes the data but leaves the dialog open; Close dismisses it
+        self.buttonBox.button(QDialogButtonBox.StandardButton.Save).clicked.connect(self.save_clicked)
         self.buttonBox.rejected.connect(self.reject)
 
+        self.v_layout.addLayout(self.h_layout_filter)
         self.v_layout.addLayout(self.h_layout_table)
         self.v_layout.addLayout(self.h_layout_photos)
         self.v_layout.addLayout(self.h_layout_captions)
@@ -216,6 +301,22 @@ class CustomDialog(QDialog):
         self.v_layout.setSpacing(20)
 
         self.setLayout(self.v_layout)
+
+    def save_clicked(self):
+        if self.save_callback:
+            self.save_callback()
+
+    def apply_filter(self, *_):
+        visible = [c for c in range(self.model.columnCount()) if c not in self.hidden_col_idx]
+        filters = []
+        for combo, edit in self.filter_rows:
+            column = combo.currentData()
+            filters.append((edit.text(), visible if column == -1 else [column]))
+        self.proxy.set_filters(filters)
+        self.update_count()
+
+    def update_count(self):
+        self.count_label.setText(f'Properties shown: {self.proxy.rowCount()} of {self.model.rowCount()}')
 
     def update_pictures(self, county):
         indexes = self.table_view.selectedIndexes()
@@ -263,7 +364,7 @@ class CustomDialog(QDialog):
         self.painter_instance.drawEllipse(300, 200, 10, 10)
         self.painter_instance.end()
         self.image_label3.setPixmap(pixmap.scaled(pic_width, pic_height))
-        url_link = '<a href="https://www.gcgis.org/apps/GreenvilleJS/?PIN=' + tax_map + '">GCGIS</a>'
+        url_link = '<a href="https://www.gcgis.org/apps/GreenvilleNJ/?PIN=' + tax_map + '">GCGIS</a>'
         self.label3.setText(url_link)
 
         return
@@ -383,15 +484,17 @@ class MainWindow(QMainWindow, Ui_QMainWindow):
         props_gui = props[props['withdrawn'] == 'A']
         props_withdrawn = props[props['withdrawn'] == 'W']
         county = self.combo_county.currentText()
-        dlg = CustomDialog(county, props_gui)
-        result = dlg.exec()
-        if result == 1:  # Accepted, aka Save
-            props_gui['rating'] = pd.to_numeric(props_gui['rating'], errors='coerce')
-            # props_gui['bid'] = pd.to_numeric(props_gui['bid '], errors='coerce')
-            self.count_rated(props_gui)
-            props = pd.concat([props_gui, props_withdrawn], ignore_index=True)
-            props.to_csv(self.get_filename(), index=False, na_rep='NaN')
-            self.print_text('Properties have been successfully saved')
+        dlg = CustomDialog(county, props_gui, save_callback=lambda: self.save_props(props_gui, props_withdrawn))
+        dlg.exec()
+
+    def save_props(self, props_gui, props_withdrawn):
+        # Works on a copy so the table keeps showing the data as it was edited
+        to_save = props_gui.copy()
+        to_save['rating'] = pd.to_numeric(to_save['rating'], errors='coerce')
+        self.count_rated(to_save)
+        props = pd.concat([to_save, props_withdrawn], ignore_index=True)
+        props.to_csv(self.get_filename(), index=False, na_rep='NaN')
+        self.print_text('Properties have been successfully saved')
 
     def close_window(self):
         # This line is commented out b/c it causes issues on laptop
@@ -518,9 +621,10 @@ class MainWindow(QMainWindow, Ui_QMainWindow):
             bbox = row['bbox']
             taxmap = row['taxmap']
             loc = row['address']
+            corners = row['corners']
 
             if isinstance(bbox, str):  # NaN will be a float, expecting a string
-                get_county_pictures(taxmap, current_county, bbox)
+                get_county_pictures(taxmap, current_county, corners)
 
             get_mapview(taxmap, current_county, loc)
             get_streetview(taxmap, current_county, loc)

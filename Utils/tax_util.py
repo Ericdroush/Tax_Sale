@@ -1,6 +1,7 @@
 # Utilities
 
 import requests
+import pandas as pd
 from urllib3.util import Retry
 from requests.adapters import HTTPAdapter
 from datetime import datetime, timedelta
@@ -13,8 +14,8 @@ def get_counties():
 def get_cols():
     return ['item', 'taxmap', 'account', 'owner', 'address', 'subdiv', 'tax_dist', 'bldgs', 'acres', 'land_use',
             'bldg_type', 'bedrooms', 'sq_ft', 'dpsf', 'yr_built', 'appraised_land', 'appraised_bldg', 'appraised_total',
-            'bldg_ratio', 'sale_price', 'sale_date', 'lake%', 'bbox', 'lat', 'long', 'dist1', 'dist2', 'dist3',
-            'withdrawn', 'county_link', 'map_link', 'amount_due', 'comments', 'rating', 'bid', 'max_bid']
+            'bldg_ratio', 'sale_price', 'sale_date', 'lake%', 'bbox', 'corners', 'lat', 'long', 'dist1', 'dist2', 'dist3',
+            'withdrawn', 'county_link', 'map_link', 'amount_due', 'comments', 'rating', 'bid', 'est_bid', 'max_bid']
 
 
 def get_type():
@@ -28,7 +29,7 @@ def get_type():
         'tax_dist': str,
         'bldgs': float,
         'acres': float,
-        'land_use': str,
+        'land_use': int,
         'bldg_type': str,
         'bedrooms': float,
         'sq_ft': float,
@@ -42,6 +43,7 @@ def get_type():
         'sale_date': str,
         'lake%': float,
         'bbox': str,
+        'corners': str,
         'lat': float,
         'long': float,
         'dist1': str,
@@ -58,6 +60,20 @@ def get_type():
         'max_bid': float,
     }
     return type_dict
+
+
+def get_defaults():
+    # Default fill value for each column, based on the type declared in get_type()
+    # int can't hold NaN so it gets 0, float gets NaN, everything else (str) gets 'NaN'
+    defaults = {}
+    for col, col_type in get_type().items():
+        if col_type is int:
+            defaults[col] = 0
+        elif col_type is float:
+            defaults[col] = float('nan')
+        else:
+            defaults[col] = 'NaN'
+    return defaults
 
 
 def geo_convert(lat, lon, wkid):
@@ -116,7 +132,18 @@ def polygon_area(points):
         area += (points['x'].iloc[j] + points['x'].iloc[i]) * (points['y'].iloc[j] - points['y'].iloc[i])
         j = i  # j is the previous vertex to i
 
-    return area / 2 / 43560
+    return round(area / 2 / 43560, 2)  # Round to 2 decimal places
+
+
+def corners_to_text(corners):
+    # DataFrame with x, y columns -> compact text, e.g. '1647646 1069640;1647808 1069527;...'
+    return ';'.join(f'{x} {y}' for x, y in zip(corners['x'], corners['y']))
+
+
+def text_to_corners(text):
+    # Reverse of corners_to_text -> DataFrame with x, y columns
+    points = [[float(v) for v in pair.split()] for pair in text.split(';')]
+    return pd.DataFrame(points, columns=['x', 'y'])
 
 
 def box_maker(corners):

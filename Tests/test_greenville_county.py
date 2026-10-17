@@ -16,13 +16,22 @@ def test_get_gis_info_greenville():
     tm = '0554020100106'  # Test property
     params = {
         'f': 'json',
-        'where': "PIN = '" + tm + "'",
+        'geometryPrecision': 0,
+        'maxAllowableOffset': 4,
+        'resultOffset': 0,
+        'resultRecordCount': 1000,
+        'orderByFields': 'OWNAM1',
+        'outSR': '{"wkid":103146,"vcsWkid":105703}',
+        'spatialRel': 'esriSpatialRelIntersects',
+        'where': "PIN = '" + tm + "'",   # pin%20%3D%20%270512010101102%27
         'outFields': '*'
     }
-    url = 'https://www.gcgis.org/arcgis/rest/services/GreenvilleJS/Map_Layers_JS/MapServer/53/query?'
+
+    url = 'https://www.gcgis.org/arcgis3/rest/services/GreenvilleNJ/Tax_Parcel_Search_and_Select/MapServer/0/query?'
     response = run_query(url, params)
     response_test = response.status_code == 200
     output = json.loads(response.text)
+    print(json.dumps(output, indent=2))
     attr = output['features'][0]['attributes']
     cols = ['SUBDIV', 'DIST', 'TACRES', 'LANDUSE', 'BEDROOMS', 'SQFEET', 'FAIRMKTVAL', 'SLPRICE',
             'DEEDDATE']
@@ -60,21 +69,18 @@ def test_find_lake_props_greenville():
 
     # Some water
     bbox = '1639164.0964566916%2C1094347.9937663972%2C1640217.7037401646%2C1095424.4917978942'
-    url = ('https://www.gcgis.org/arcgis/rest/services/GreenvilleJS/Map_Layers_JS/MapServer/export?dpi=96'
-           '&transparent=true&format=png8&layers=show%3A53%2C47%2C48&bbox=')
+    # Water layers in the Greenville_Base service: 5 = Stream, 6 = Lake or River
+    # (the old GreenvilleJS/Map_Layers_JS service no longer exists)
+    url = ('https://www.gcgis.org/arcgis3/rest/services/GCGIA/Greenville_Base/MapServer/export?dpi=96'
+           '&transparent=true&format=png8&layers=show%3A5%2C6&bbox=')
     url = url + bbox
     url = url + '&bboxSR=6570&imageSR=6570&size=937%2C955&f=image'
 
-    img = Image.open(urlopen(url))
+    img = Image.open(urlopen(url)).convert('RGBA')
     pixel_count = img.size[0] * img.size[1]
-    img_list = list(img.getdata())
 
-    lake_pixel = 0
-    lake_count = img_list.count(lake_pixel)
-    lake_pct = (1 - lake_count / pixel_count) * 100
+    # Transparent pixels (alpha == 0) are background; anything else is water
+    water_count = sum(1 for px in img.getdata() if px[3] > 0)
+    lake_pct = water_count / pixel_count * 100
 
-    print(img.mode, img.size, img.info, img.getbands())
-    # img.show()
-    print([img_list.count(x) for x in range(max(img_list))])
-
-    assert lake_pct == pytest.approx(9.6667, 0.001)
+    assert lake_pct == pytest.approx(8.8, rel=0.02)

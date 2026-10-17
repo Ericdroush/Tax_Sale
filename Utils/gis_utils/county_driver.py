@@ -4,6 +4,7 @@ This is the has overall logic for looking up country information - it calls coun
 
 @author: ericd
 """
+import io
 import os
 
 from bs4 import BeautifulSoup
@@ -11,6 +12,7 @@ import pandas as pd
 from pathlib import Path
 import time
 from datetime import date
+# Need to comment out for testing in the main block
 from Utils.tax_util import *
 from Utils.google_util import *
 
@@ -75,10 +77,17 @@ def get_props(county, tm):
     if county == 'greenville':
         params = {
             'f': 'json',
-            'where': "PIN = '" + tm + "'",
+            'geometryPrecision': 0,
+            'maxAllowableOffset': 4,
+            'resultOffset': 0,
+            'resultRecordCount': 1000,
+            'orderByFields': 'OWNAM1',
+            'outSR': '{"wkid":103146,"vcsWkid":105703}',
+            'spatialRel': 'esriSpatialRelIntersects',
+            'where': "PIN = '" + tm + "'",   # pin%20%3D%20%270512010101102%27
             'outFields': '*'
         }
-        url = 'https://www.gcgis.org/arcgis/rest/services/GreenvilleJS/Map_Layers_JS/MapServer/53/query?'
+        url = 'https://www.gcgis.org/arcgis3/rest/services/GreenvilleNJ/Tax_Parcel_Search_and_Select/MapServer/0/query?'
     elif county == 'anderson':
         params = {
             'f': 'json',
@@ -101,7 +110,7 @@ def get_props(county, tm):
 
 
 def populate_fields(county, tm, prop, props, output):
-    print(output)
+    # print(output)
     attr = output['features'][0]['attributes']
     corners = pd.DataFrame(data=output['features'][0]['geometry']['rings'][0], columns=['x', 'y'])
     wkid = output['spatialReference']['latestWkid']
@@ -118,6 +127,8 @@ def populate_fields(county, tm, prop, props, output):
     map_link = ('=HYPERLINK("' + link_address + '","Map")')
 
     bbox = box_maker(corners)
+    corners_str = corners_to_text(corners)
+
     withdrawn = 'A'
     lake, dist1, dist2, dist3 = 'NaN', 'NaN', 'NaN', 'NaN'
 
@@ -128,10 +139,12 @@ def populate_fields(county, tm, prop, props, output):
         acres = attr['TACRES']
         landuse = attr['LANDUSE']
         # This doesn't work, always goes to 1, maybe landuse is a text?
-        if landuse == 1180 or landuse == 9171 or landuse == 6800:
+        if landuse == "1180" or landuse == "9171" or landuse == "6800":
             bldgs = 0
         else:
             bldgs = 1
+        # 110 Multi-Family Duplex
+        # 940 Storage / Warehouse – General
         # 1100 Residential Single Family
         # 1101 Residential Single Family with Auxiliary Use
         # 1170 Residential Mobile Home with Land
@@ -156,6 +169,7 @@ def populate_fields(county, tm, prop, props, output):
         appraised_land = 'NaN'
         appraised_bldg = 'NaN'
         bldg_ratio = 'NaN'
+        # Other attributes that might be useful:  IMPROVED, PROPTYPE, POWNNM
 
         # Calculated parameters
         dpsf = dpsf_calc(appraised_total, sq_ft)
@@ -165,7 +179,7 @@ def populate_fields(county, tm, prop, props, output):
             acres = calc_acres
             bldgs = -9  # Flag indicated that calculated acres is being used
 
-        county_link = '=HYPERLINK("https://www.gcgis.org/apps/GreenvilleJS/?PIN=' + tm + '","County")'
+        county_link = '=HYPERLINK("https://www.gcgis.org/apps/GreenvilleNJ/?PIN=' + tm + '","County")'
 
     elif county == 'anderson':
         account = 'NaN'
@@ -255,7 +269,7 @@ def populate_fields(county, tm, prop, props, output):
     est_bid = round(max(appraised_total, sale_price) * 0.80, 0)  # Based on past experience the bid is likely to go
     data_list = [props['item'].iloc[prop], tm, account, props['owner'].iloc[prop], address, subdiv, tax_dist,
                  bldgs, acres, landuse, bldg_type, bedrooms, sq_ft, dpsf, yr_built, appraised_land, appraised_bldg,
-                 appraised_total, bldg_ratio, sale_price, sale_date, lake, bbox, lat, lon, dist1, dist2, dist3,
+                 appraised_total, bldg_ratio, sale_price, sale_date, lake, bbox, corners_str, lat, lon, dist1, dist2, dist3,
                  withdrawn, county_link, map_link, amount_due, '', '', '', est_bid, max_bid]
 
     return data_list
@@ -301,12 +315,12 @@ def get_gis_info(self, county, filename, test_flag):
                                 .format(str(prop_count), str(total_count), str(tm), int(est_time_left)))
 
                 if len(output['features']) == 0:  # Didn't get something back from the website
-                    pass
-                    props_new.loc[0] = 'NaN'  # Fill with NaN
-                    props_new['item'].loc[0] = props['item'].iloc[prop]
-                    props_new['taxmap'].loc[0] = tm
-                    props_new['owner'].loc[0] = props['owner'].iloc[prop]
-                    props_new.to_csv(filename, mode='a', index=False, header=False)
+                    defaults = get_defaults()  # Default value for each column based on its expected type
+                    props_new.loc[0] = [defaults[col] for col in cols]
+                    props_new.loc[0, 'item'] = props['item'].iloc[prop]
+                    props_new.loc[0, 'taxmap'] = tm
+                    props_new.loc[0, 'owner'] = props['owner'].iloc[prop]
+                    props_new.to_csv(filename, mode='a', index=False, header=False, na_rep='NaN')
 
                 else:
                     data_list = populate_fields(county, tm, prop, props, output)
@@ -351,42 +365,19 @@ def update_withdrawn(self, county, filename, test_flag):
 
 def lake_url(county, bbox):
     if county == 'greenville':
-        url = ('https://www.gcgis.org/arcgis/rest/services/GreenvilleJS/Map_Layers_JS/MapServer/export?dpi=96'
-               '&transparent=true&format=png8&layers=show%3A53%2C47%2C48&bbox=')
-        url = url + bbox
-        return url + '&bboxSR=6570&imageSR=6570&size=937%2C955&f=image'
-    elif county == 'anderson':
-        url = ('https://propertyviewer.andersoncountysc.org/arcgis/rest/services/Overlays/MapServer/export?dpi=96'
-               '&transparent=true&format=png8&layers=show%3A1&bbox=')
-        url = url + bbox
-        return url + '&bboxSR=102733&imageSR=102733&size=759%2C885&f=image'
-    elif county == 'spartanburg':
-        return 0  # Not set up for spartanburg yet
-
-
-def county_pic_url(county, bbox):
-    if county == 'greenville':
         """
-        Layer   Description
-        0       Symbols
-        17      Swamp Rabbet Trail
-        35      Lot numbers
-        38      Railroad Tracks
-        41      Street Names
-        47      Water - Large bodies of water
-        48      Water - Rivers
-        49      Colored backgrounds
-        50      Red former property lines
-        52      Property lines
+        Browse this to find the layers
+        https://www.gcgis.org/arcgis3/rest/services
         
-        58, 59, 60, 61, 62, 63, 64, 66 - Might be flood plain
-
-        2, 3, 4, 5, 16, 39, 40, 43, 78  Empty (at least for test map)
+        Layer   Description
+        41      Flood Plain
+        5, 6    Water - Lakes and Rivers
         """
-        url = ('https://www.gcgis.org/arcgis/rest/services/GreenvilleJS/Map_Layers_JS/MapServer/export?dpi=96'
-               '&transparent=true&format=png8&layers=show%3A52%2C0%2C17%2C38%2C41%2C47%2C48&bbox=')
+        url = ('https://www.gcgis.org/arcgis3/rest/services/GCGIA/Greenville_Base/MapServer/export?dpi=96'
+            '&transparent=true&format=png8&layers=show%3A5%2C6&bbox=')
         url = url + bbox
-        return url + '&bboxSR=6570&imageSR=6570&size=600%2C400&f=image'
+        url = url + '&bboxSR=6570&imageSR=6570&size=937%2C955&f=image'
+        return url 
     elif county == 'anderson':
         url = ('https://propertyviewer.andersoncountysc.org/arcgis/rest/services/Overlays/MapServer/export?dpi=96'
                '&transparent=true&format=png8&layers=show%3A1&bbox=')
@@ -394,37 +385,11 @@ def county_pic_url(county, bbox):
         return url + '&bboxSR=102733&imageSR=102733&size=759%2C885&f=image'
     elif county == 'spartanburg':
         return 0  # Not set up for spartanburg yet
-
-
-def set_lake_params(county):
-    if county == 'greenville':
-        return 0, 'inv'
-    elif county == 'anderson':
-        return 1, 'norm'
-    elif county == 'spartanburg':
-        return 0, 'inv'  # Hasn't been established yet, just placeholder values
 
 
 def find_lake_props(self, county, filename):
     from urllib.request import urlopen
     from PIL import Image
-
-    #layers=show%3A53%2C49%2C48
-    #bbox = xmin, ymin, xmax, ymax - use min 1000m measurements
-    #   Corner format saved during get_gis_info routine - may not be the same for each county...
-    #url = []
-    #Lots of lake - some layers 19%
-    #url.append('https://www.gcgis.org/arcgis/rest/services/GreenvilleJS/Map_Layers_JS/MapServer/export?dpi=96&transparent=true&format=png8&layers=show%3A53%2C49%2C48&bbox=1607371.9373959857%2C1154026.867110622%2C1608673.3288876575%2C1155353.258652294&bboxSR=6570&imageSR=6570&size=937%2C955&f=image')
-    #No lake - 0%
-    #url.append('https://www.gcgis.org/arcgis/rest/services/GreenvilleJS/Map_Layers_JS/MapServer/export?dpi=96&transparent=true&format=png8&layers=show%3A53%2C49%2C48&bbox=1583956.6127875582%2C1147246.2979939282%2C1585258.0042792303%2C1148572.6895356001&bboxSR=6570&imageSR=6570&size=937%2C955&f=image')
-    #Some river/pond - 8e-3%
-    #url.append('https://www.gcgis.org/arcgis/rest/services/GreenvilleJS/Map_Layers_JS/MapServer/export?dpi=96&transparent=true&format=png8&layers=show%3A53%2C49%2C48&bbox=1581395.4965542147%2C1144553.2370522511%2C1583998.2795375583%2C1147206.020135595&bboxSR=6570&imageSR=6570&size=937%2C955&f=image')
-    #Pond - zoomed way in
-    #url.append('https://www.gcgis.org/arcgis/rest/services/GreenvilleJS/Map_Layers_JS/MapServer/export?dpi=96&transparent=true&format=png8&layers=show%3A53%2C49%2C48&bbox=1583171.9172041721%2C1145797.2437544896%2C1583562.334651674%2C1146195.1612169913&bboxSR=6570&imageSR=6570&size=937%2C955&f=image')
-    #Whole lotta lake
-    #url.append('https://www.gcgis.org/arcgis/rest/services/GreenvilleJS/Map_Layers_JS/MapServer/export?dpi=96&transparent=true&format=png8&layers=show%3A53%2C49%2C48&bbox=1606007.8196930396%2C1154703.6514629384%2C1609911.9941680552%2C1158682.8260879542&bboxSR=6570&imageSR=6570&size=937%2C955&f=image')
-    #Eric's hand built test
-    #url.append('https://www.gcgis.org/arcgis/rest/services/GreenvilleJS/Map_Layers_JS/MapServer/export?dpi=96&transparent=true&format=png8&layers=show%3A53%2C49%2C48&bbox=1607391%2C1154442%2C1608391%2C1155442&bboxSR=6570&imageSR=6570&size=937%2C955&f=image')
 
     if Path(filename).is_file():
         props = pd.read_csv(filename, sep=',', dtype=get_type())
@@ -447,21 +412,20 @@ def find_lake_props(self, county, filename):
                 lake_val.append('NaN')
             else:
                 url = lake_url(county, bbox)
-                img = Image.open(urlopen(url))
+                img = Image.open(urlopen(url)).convert('RGBA')
                 pixel_count = img.size[0] * img.size[1]
                 img_list = list(img.getdata())
+                                
                 # These statements can help dig into the details of the image to figure out how lakes are ID'd
                 # print(img.mode, img.size, img.info, img.getbands())
                 # img2 = img.convert('RGB')
                 # img.show()
                 # print([img_list.count(x) for x in range(max(img_list))])
 
-                lake_pixel, lake_calc = set_lake_params(county)
-                lake_count = img_list.count(lake_pixel)
-                if lake_calc == 'norm':
-                    lake_val.append((lake_count / pixel_count) * 100)
-                elif lake_calc == 'inv':
-                    lake_val.append((1 - lake_count / pixel_count) * 100)
+                # Transparent pixels (alpha == 0) are background; anything else is water
+                water_count = sum(1 for px in img.getdata() if px[3] > 0)
+                lake_pct = water_count / pixel_count * 100
+                lake_val.append(lake_pct)
 
         props['lake%'] = lake_val
         props.to_csv(filename, index=False, na_rep='NaN')
@@ -473,46 +437,115 @@ def find_lake_props(self, county, filename):
         return False
 
 
-def get_county_pictures(taxmap, county, bbox):
-    from urllib.request import urlopen
-    from PIL import Image
+def county_pic_url(county, bbox):
+    if county == 'greenville':
+        """
+        Browse this to find the layers
+        https://www.gcgis.org/arcgis3/rest/services
+        
+        Layer   Description
+        41      Flood Plain
+        5, 6    Water - Lakes and Rivers
+        """
+        url = ('https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/export?'
+               'format=png8&bbox=')
+        url = url + bbox
+        return url + '&bboxSR=6570&imageSR=6570&size=600%2C400&f=image'
+    elif county == 'anderson':
+        url = ('https://propertyviewer.andersoncountysc.org/arcgis/rest/services/Overlays/MapServer/export?dpi=96'
+               '&transparent=true&format=png8&layers=show%3A1&bbox=')
+        url = url + bbox
+        return url + '&bboxSR=102733&imageSR=102733&size=759%2C885&f=image'
+    elif county == 'spartanburg':
+        return 0  # Not set up for spartanburg yet
+    else:
+        return 'County Not Found'
 
+
+def get_county_pictures(taxmap, county, corners, size=800, margin=0.5, line_width=3):
+    # Assumes that corners is in text form and needs converted via text_to_corners()
+    from urllib.request import urlopen
+    from PIL import Image, ImageDraw
+    import io
+
+    corners = text_to_corners(corners)
     if not os.path.isfile('Counties/' + county.title() + '/CountyView/' + taxmap + '.png'):
-        url = county_pic_url(county, bbox)
-        img = Image.open(urlopen(url))
-        img = img.convert("RGB")
+        # Square bbox centered on the parcel, so the image isn't stretched
+        xs = corners['x'].tolist()
+        ys = corners['y'].tolist()
+        half = max(max(xs) - min(xs), max(ys) - min(ys)) * (0.5 + margin)
+        # World Imagery errors (HTTP 500) if zoomed in past ~1 ft per pixel, so keep the image at least size feet wide
+        half = max(half, size / 2)
+        cx, cy = (min(xs) + max(xs)) / 2, (min(ys) + max(ys)) / 2
+        xmin, ymin, xmax, ymax = cx - half, cy - half, cx + half, cy + half
+
+        # Aerial photo (Esri World Imagery)
+        aerial_url = 'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/export'
+        params = {'bbox': f'{xmin},{ymin},{xmax},{ymax}', 'bboxSR': 6570, 'imageSR': 6570,
+                'size': f'{size},{size}', 'format': 'jpg', 'f': 'image'}
+        resp = requests.get(aerial_url, params=params, timeout=60)
+        img = Image.open(io.BytesIO(resp.content)).convert('RGB')
+        # Convert map coordinates to pixels and draw the red outline
+        draw = ImageDraw.Draw(img)
+        pts = [((x - xmin) / (xmax - xmin) * size, (ymax - y) / (ymax - ymin) * size) for x, y in zip(corners['x'], corners['y'])]
+        draw.line(pts + [pts[0]], fill=(255, 0, 0), width=line_width)
+
         img.save('Counties/' + county.title() + '/CountyView/' + taxmap + '.png')
 
-    # img.show()
+        # img.show()
 
     return
 
 
-def filter_props():
-    """
-    This is a place to hold all the automatic filtering that I do that can be automated in the future
-    Filter                                            | Rating| Comment          | % in 2025 Data
-    -----------------------------------------------------------------------------------------------
-    acres < 0.1 and landuse in [1180, 6800, 9170]     |   0   | Too small        |  4.7%
-    est_bid > 150000                                  |   0   | Too expensive    | 25.8%
-    subdiv in ["Cliff", "Glassy"] and landuse = 1180  |   0   | Cliffs           |  1.5%
-    landuse in [130, 1170, 1171]                      |   0   | MH               |  9.6%
-    landuse in [1181, 205]                            |   0   | HOA              |  1.6%
-    landuse in [805]                                  |   0   | Cemetery!!!      |  0.0%
-    landuse in [1100, 1101, 9171] and est_bid < 30000 |   0   | Low price house  |  0.6%
-    _______________________________________________________________________________________________
-                                                                                 | 43.8%
-    What's left
-    _______________________________________________________________________________________________
-    Houses: landuse in [1100, 1101, 9171]                                        | 18.7%
-    Land: landuse in [1180, 6800, 9170]                                          | 35.3%
-    Other: [...,...]                                                             |  1.6%
-    _______________________________________________________________________________________________
-                                                                                 | 55.6%
-    Other filters to put in place...
-    -If previous owner is FLC or forfeited land commission - avoid these
-    -Look for HOA in owners name
-    """
+if __name__ == '__main__':
+    import os
+    import io
+    import sys
+    print(os.path.join(os.path.dirname(__file__), '..'))
+    sys.path.append(os.path.join(os.path.dirname(__file__), '..'))  # Up one directory, so Utils is found
+    from tax_util import *
+    from google_util import *
+    from urllib.request import urlopen
+    from PIL import Image, ImageDraw
 
-    pass
-    return
+    county = "greenville"
+    margin = 0.5
+    size = 1000
+    line_width = 3
+    taxmap = "0376000105000"
+    parcel_url = ('https://www.gcgis.org/arcgis3/rest/services/GreenvilleNJ/Tax_Parcel_Search_and_Select/'
+                  'MapServer/0/query')
+    params = {'f': 'json', 'where': "PIN = '" + taxmap + "'", 'outFields': 'PIN', 'outSR': 6570,
+              'returnGeometry': 'true'}
+    features = requests.get(parcel_url, params=params, timeout=60).json().get('features', [])
+    corners = pd.DataFrame(data=features[0]['geometry']['rings'][0], columns=['x', 'y'])
+
+    # Save this to skip the above block if needed
+    # corners_str = '1647645.6669947505 1069640.1066273004;1647649.0679133832 1069637.730314955;1647649.3999343812 1069637.4983595759;1647710.7201443613 1069594.6443569511;1647807.5049212575 1069527.0068897605;1647651.4970472455 1069369.8487532735;1647788.8038057685 1069241.7545931786;1647948.9540682435 1069404.0715223104;1648568.8057742715 1068968.5666010529;1648524.222769022 1068912.1286089271;1648374.144685045 1068738.3415354341;1648223.3267716467 1068575.9475065619;1648125.4957349151 1068478.3959973752;1648031.6617454141 1068388.2585301846;1647469.333989501 1067869.7086614221;1647012.2575459331 1068135.039041996;1647013.2588582635 1068143.1479658782;1647050.664041996 1068446.0672572106;1647157.3930446208 1068830.019685045;1647226.9612860829 1069080.2801837325;1647129.7995406836 1069271.1827427894;1647237.1138451397 1069349.0318241417;1647312.140748039 1069405.0531496108;1647321.152230978 1069411.7818241417;1647610.8333333284 1069628.0836614221;1647612.2257217914 1069629.1233595759;1647646.2260498703 1069654.5108267665;1647645.8543307036 1069644.933727041;1647645.6669947505 1069640.1066273004'
+    # corners = text_to_corners(corners_str)
+    
+    bbox = box_maker(corners)
+
+    # Square bbox centered on the parcel, so the image isn't stretched
+    xs = corners['x'].tolist()
+    ys = corners['y'].tolist()
+    half = max(max(xs) - min(xs), max(ys) - min(ys)) * (0.5 + margin)
+    # World Imagery errors (HTTP 500) if zoomed in past ~1 ft per pixel, so keep the image at least size feet wide
+    half = max(half, size / 2)
+    cx, cy = (min(xs) + max(xs)) / 2, (min(ys) + max(ys)) / 2
+    xmin, ymin, xmax, ymax = cx - half, cy - half, cx + half, cy + half
+
+    # Aerial photo (Esri World Imagery)
+    aerial_url = 'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/export'
+    params = {'bbox': f'{xmin},{ymin},{xmax},{ymax}', 'bboxSR': 6570, 'imageSR': 6570,
+            'size': f'{size},{size}', 'format': 'jpg', 'f': 'image'}
+    print(f'Requesting aerial image with params: {params}')
+    resp = requests.get(aerial_url, params=params, timeout=60)
+    print(f'Response status code: {resp.status_code}')
+    img = Image.open(io.BytesIO(resp.content)).convert('RGB')
+    # Convert map coordinates to pixels and draw the red outline
+    draw = ImageDraw.Draw(img)
+    pts = [((x - xmin) / (xmax - xmin) * size, (ymax - y) / (ymax - ymin) * size) for x, y in zip(corners['x'], corners['y'])]
+    draw.line(pts + [pts[0]], fill=(255, 0, 0), width=line_width)
+
+    img.show()
