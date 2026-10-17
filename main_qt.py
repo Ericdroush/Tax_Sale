@@ -39,6 +39,8 @@ from qt_ui import Ui_QMainWindow
 
 
 class PandasModel(QAbstractTableModel):
+    editable_columns = ('comments', 'rating')  # All other columns are read-only (still selectable)
+
     def __init__(self, data):
         super().__init__()
         self._data = data
@@ -86,7 +88,10 @@ class PandasModel(QAbstractTableModel):
         return False
 
     def flags(self, index):
-        return Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable | Qt.ItemFlag.ItemIsEditable
+        flags = Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable
+        if index.isValid() and self._data.columns[index.column()] in self.editable_columns:
+            flags |= Qt.ItemFlag.ItemIsEditable
+        return flags
 
     def headerData(self, section, orientation, role=Qt.ItemDataRole.DisplayRole):
         if role == Qt.ItemDataRole.DisplayRole:
@@ -140,8 +145,9 @@ class SortFilterProxy(QSortFilterProxyModel):
 
 
 class CustomDialog(QDialog):
-    def __init__(self, county, props, parent=None, *args, **kwargs):
+    def __init__(self, county, props, parent=None, *args, save_callback=None, **kwargs):
         super().__init__(parent, *args, **kwargs)
+        self.save_callback = save_callback
 
         self.setWindowTitle("County Property Detail Viewer")
         self.setWindowFlags(self.windowFlags() | Qt.WindowType.WindowMaximizeButtonHint)
@@ -282,7 +288,8 @@ class CustomDialog(QDialog):
         q_btn = (QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Close)
 
         self.buttonBox = QDialogButtonBox(q_btn)
-        self.buttonBox.accepted.connect(self.accept)
+        # Save writes the data but leaves the dialog open; Close dismisses it
+        self.buttonBox.button(QDialogButtonBox.StandardButton.Save).clicked.connect(self.save_clicked)
         self.buttonBox.rejected.connect(self.reject)
 
         self.v_layout.addLayout(self.h_layout_filter)
@@ -294,6 +301,10 @@ class CustomDialog(QDialog):
         self.v_layout.setSpacing(20)
 
         self.setLayout(self.v_layout)
+
+    def save_clicked(self):
+        if self.save_callback:
+            self.save_callback()
 
     def apply_filter(self, *_):
         visible = [c for c in range(self.model.columnCount()) if c not in self.hidden_col_idx]
@@ -473,15 +484,17 @@ class MainWindow(QMainWindow, Ui_QMainWindow):
         props_gui = props[props['withdrawn'] == 'A']
         props_withdrawn = props[props['withdrawn'] == 'W']
         county = self.combo_county.currentText()
-        dlg = CustomDialog(county, props_gui)
-        result = dlg.exec()
-        if result == 1:  # Accepted, aka Save
-            props_gui['rating'] = pd.to_numeric(props_gui['rating'], errors='coerce')
-            # props_gui['bid'] = pd.to_numeric(props_gui['bid '], errors='coerce')
-            self.count_rated(props_gui)
-            props = pd.concat([props_gui, props_withdrawn], ignore_index=True)
-            props.to_csv(self.get_filename(), index=False, na_rep='NaN')
-            self.print_text('Properties have been successfully saved')
+        dlg = CustomDialog(county, props_gui, save_callback=lambda: self.save_props(props_gui, props_withdrawn))
+        dlg.exec()
+
+    def save_props(self, props_gui, props_withdrawn):
+        # Works on a copy so the table keeps showing the data as it was edited
+        to_save = props_gui.copy()
+        to_save['rating'] = pd.to_numeric(to_save['rating'], errors='coerce')
+        self.count_rated(to_save)
+        props = pd.concat([to_save, props_withdrawn], ignore_index=True)
+        props.to_csv(self.get_filename(), index=False, na_rep='NaN')
+        self.print_text('Properties have been successfully saved')
 
     def close_window(self):
         # This line is commented out b/c it causes issues on laptop
