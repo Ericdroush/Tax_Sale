@@ -143,18 +143,22 @@ def populate_fields(county, tm, prop, props, output):
             bldgs = 0
         else:
             bldgs = 1
-        # 110 Multi-Family Duplex
-        # 940 Storage / Warehouse – General
-        # 1100 Residential Single Family
-        # 1101 Residential Single Family with Auxiliary Use
-        # 1170 Residential Mobile Home with Land
-        # 1171 Residential Mobile Home on Mobile Home File
-        # 1180 Residential Vacant
-        # 1181 Homeowners Association Property
-        # 1182 Common Area
-        # 6800 Commercial Vacant
-        # 9170 Agricultural Vacant
-        # 9171 Agricultural Improved
+        # 110: Multi-Family Duplex
+        # 112: Multi-Family Multiplex
+        # 330: Auto - Service Garage / Body Shop
+        # 421: Office – General
+        # 890: Broadcasting Facility
+        # 940: Storage / Warehouse – General
+        # 1100: Residential Single Family
+        # 1101: Residential Single Family with Auxiliary Use
+        # 1170: Residential Mobile Home with Land
+        # 1171: Residential Mobile Home on Mobile Home File
+        # 1180: Residential Vacant
+        # 1181: Homeowners Association Property
+        # 1182: Common Area
+        # 6800: Commercial Vacant
+        # 9170: Agricultural Vacant
+        # 9171: Agricultural Improved
         # bldg_type = attr['PROPTYPE']  # Discontinued in 2024
         bedrooms = attr['BEDROOMS']
         sq_ft = attr['SQFEET']

@@ -505,7 +505,11 @@ class MainWindow(QMainWindow, Ui_QMainWindow):
         with open('datafile.txt', 'w') as f:
             f.write(self.combo_county.currentText() + '\n')
             for c_county, c_class in c.items():
-                f.write(str(vars(c_class)) + '\n')
+                state = {
+                    key: value.item() if callable(getattr(value, 'item', None)) else value
+                    for key, value in vars(c_class).items()
+                }
+                f.write(str(state) + '\n')
 
     def get_filename(self):
         return 'Counties/' + self.combo_county.currentText() + '/props.csv'
@@ -691,4 +695,3 @@ app.setStyle("Fusion")
 window = MainWindow()
 window.show()
 sys.exit(app.exec())
-
