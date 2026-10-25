@@ -29,7 +29,7 @@ from Utils.google_util import find_distance
 from Utils.tax_util import *
 from Utils.gis_utils.county_driver import *
 from PyQt6 import QtWidgets, QtCore
-from PyQt6.QtCore import Qt, QAbstractTableModel, QUrl, QSortFilterProxyModel
+from PyQt6.QtCore import Qt, QAbstractTableModel, QUrl, QSortFilterProxyModel, QPointF
 from PyQt6.QtWidgets import QApplication, QMainWindow, QStatusBar, QDialog, QTableView, QVBoxLayout
 from PyQt6.QtWidgets import QComboBox, QLineEdit
 from PyQt6.QtWidgets import QLabel, QWidget, QHBoxLayout, QDialogButtonBox, QStyledItemDelegate, QStyle, QStyleOption
@@ -142,6 +142,16 @@ class SortFilterProxy(QSortFilterProxyModel):
             return l_val < r_val
         except TypeError:
             return str(l_val) < str(r_val)
+
+
+def load_county_basemap(county):
+    # Reads the cached whole-county map written by get_county_basemap(); returns (QPixmap, extent) or None
+    import json
+    folder = 'Counties/' + county.title() + '/'
+    if not (os.path.isfile(folder + 'CountyBase.png') and os.path.isfile(folder + 'CountyBase.json')):
+        return None
+    with open(folder + 'CountyBase.json') as f:
+        return QPixmap(folder + 'CountyBase.png'), json.load(f)
 
 
 class CustomDialog(QDialog):
@@ -260,6 +270,14 @@ class CustomDialog(QDialog):
         pixmap = QPixmap('Counties/' + county + '/CountyView/test.jpg')
         self.image_label3.setPixmap(pixmap.scaled(pic_width, pic_height))
         self.h_layout_photos.addWidget(self.image_label3)
+
+        # Whole-county locator map: the base map is drawn on the fly with a marker for the selected property
+        self.basemap = load_county_basemap(county)
+        self.image_label4 = QLabel(self)
+        if self.basemap:
+            self.image_label4.setPixmap(self.basemap[0].scaledToHeight(
+                pic_height, Qt.TransformationMode.SmoothTransformation))
+        self.h_layout_photos.addWidget(self.image_label4)
         self.h_layout_photos.setSpacing(20)
 
         self.h_layout_captions = QHBoxLayout()
@@ -284,6 +302,9 @@ class CustomDialog(QDialog):
         self.label3.setText(url_link)
         self.label3.setOpenExternalLinks(True)
         self.h_layout_captions.addWidget(self.label3)
+
+        self.label4 = QLabel('Location in county', self)
+        self.h_layout_captions.addWidget(self.label4)
         self.h_layout_captions.setSpacing(20)
 
         q_btn = (QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Close)
@@ -319,17 +340,40 @@ class CustomDialog(QDialog):
     def update_count(self):
         self.count_label.setText(f'Properties shown: {self.proxy.rowCount()} of {self.model.rowCount()}')
 
+    def update_locator(self, corners, height):
+        if not self.basemap:
+            return
+        pixmap = self.basemap[0].scaledToHeight(height, Qt.TransformationMode.SmoothTransformation)
+        try:
+            fx, fy = locator_fraction(*corners_center(corners), self.basemap[1])
+        except (ValueError, TypeError):  # Property has no corners (no GIS data), show the map without a marker
+            fx = fy = None
+        if fx is not None and 0 <= fx <= 1 and 0 <= fy <= 1:
+            x, y = fx * pixmap.width(), fy * pixmap.height()
+            painter = QPainter(pixmap)
+            painter.setPen(QPen(Qt.GlobalColor.red, 2))
+            painter.drawEllipse(QPointF(x, y), 9, 9)
+            painter.setPen(QPen(Qt.GlobalColor.white, 1))
+            painter.setBrush(QBrush(Qt.GlobalColor.red))
+            painter.drawEllipse(QPointF(x, y), 4, 4)
+            painter.end()
+        self.image_label4.setPixmap(pixmap)
+
     def update_pictures(self, county):
         indexes = self.table_view.selectedIndexes()
         if indexes:
             index = indexes[0]
             tax_map = index.siblingAtColumn(self.col_index['taxmap']).data()
             address = index.siblingAtColumn(self.col_index['address']).data()
+            corners = index.siblingAtColumn(self.col_index['corners']).data()
         else:
             return
 
-        pic_width = int((self.width() - 40) / 4 - 10)
+        # Five images across: the county map is tall and narrow, so it gets less width than the others
+        aspect = self.basemap[0].width() / self.basemap[0].height() if self.basemap else 0
+        pic_width = int((self.width() - 20 - 4 * self.h_layout_photos.spacing()) / (4 + 2 / 3 * aspect))
         pic_height = int(pic_width * 2/3)
+        self.update_locator(corners, pic_height)
 
         self.pen = QPen(Qt.GlobalColor.red)
         self.pen.setWidth(5)
@@ -614,6 +658,7 @@ class MainWindow(QMainWindow, Ui_QMainWindow):
         dt = []
         count = 0
         total_count = len(props)
+        get_county_basemap(current_county)  # Whole-county locator map, only downloaded the first time
         for index, row in props.iterrows():
             count += 1
             t1 = time.perf_counter()

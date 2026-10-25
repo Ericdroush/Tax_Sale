@@ -13,8 +13,8 @@ from pathlib import Path
 import time
 from datetime import date
 # Need to comment out for testing in the main block
-from Utils.tax_util import *
-from Utils.google_util import *
+# from Utils.tax_util import *
+# from Utils.google_util import *
 
 
 def obtain_props(self, county):
@@ -468,7 +468,7 @@ def county_pic_url(county, bbox):
         return 'County Not Found'
 
 
-def get_county_pictures(taxmap, county, corners, size=800, margin=0.5, line_width=3):
+def get_county_pictures(taxmap, county, corners, size=800, margin=0.5, line_width=3, show=False):
     # Assumes that corners is in text form and needs converted via text_to_corners()
     from urllib.request import urlopen
     from PIL import Image, ImageDraw
@@ -496,14 +496,103 @@ def get_county_pictures(taxmap, county, corners, size=800, margin=0.5, line_widt
         pts = [((x - xmin) / (xmax - xmin) * size, (ymax - y) / (ymax - ymin) * size) for x, y in zip(corners['x'], corners['y'])]
         draw.line(pts + [pts[0]], fill=(255, 0, 0), width=line_width)
 
-        img.save('Counties/' + county.title() + '/CountyView/' + taxmap + '.png')
-
-        # img.show()
+        if show:
+            img.show()
+        else:
+            img.save('Counties/' + county.title() + '/CountyView/' + taxmap + '.png')
 
     return
 
 
+def locator_fraction(x, y, extent):
+    # Map coordinates -> (fx, fy) position within the base map, 0-1 measured from the top-left corner
+    return ((x - extent['xmin']) / (extent['xmax'] - extent['xmin']),
+            (extent['ymax'] - y) / (extent['ymax'] - extent['ymin']))
+
+
+def corners_center(corners):
+    # Center of the parcel from its text-form corners
+    from Utils.tax_util import text_to_corners
+    corners = text_to_corners(corners)
+    return ((corners['x'].min() + corners['x'].max()) / 2, (corners['y'].min() + corners['y'].max()) / 2)
+
+
+def get_county_basemap(county, width=900, min_lake_area=2_000_000, min_city_sq_miles=3):
+    """
+    Builds (once) the whole-county locator map: county boundary, highways and city limits from the county's export
+    service, plus large lakes and city names drawn on top (the service hides these at county scale).
+    Saved as Counties/<County>/CountyBase.png with the map extent in CountyBase.json.
+    Returns (png_path, extent) or None if the county isn't supported.
+    """
+    import json
+    import io
+    from PIL import Image, ImageDraw, ImageFont
+
+    if county != 'greenville':
+        return None
+
+    folder = 'Counties/' + county.title() + '/'
+    png_path, json_path = folder + 'CountyBase.png', folder + 'CountyBase.json'
+    if os.path.isfile(png_path) and os.path.isfile(json_path):
+        with open(json_path) as f:
+            return png_path, json.load(f)
+
+    base = 'https://www.gcgis.org/arcgis3/rest/services/GCGIA/Greenville_Base/MapServer'
+    # Layers: 16 County Boundary, 1 Federal Highway, 14 Municipal Boundary, 6 Lake or River
+    resp = requests.get(base + '/16/query', verify=False, timeout=60,
+                        params={'f': 'json', 'where': '1=1', 'returnExtentOnly': 'true', 'outSR': 6570})
+    ext = resp.json()['extent']
+    pad = 0.03 * max(ext['xmax'] - ext['xmin'], ext['ymax'] - ext['ymin'])
+    extent = {'xmin': ext['xmin'] - pad, 'ymin': ext['ymin'] - pad, 'xmax': ext['xmax'] + pad, 'ymax': ext['ymax'] + pad}
+    height = round(width * (extent['ymax'] - extent['ymin']) / (extent['xmax'] - extent['xmin']))
+    extent.update({'width': width, 'height': height})
+
+    params = {'bbox': f"{extent['xmin']},{extent['ymin']},{extent['xmax']},{extent['ymax']}", 'bboxSR': 6570,
+              'imageSR': 6570, 'size': f'{width},{height}', 'format': 'png', 'transparent': 'false',
+              'layers': 'show:16,1,14', 'f': 'image'}
+    img = Image.open(io.BytesIO(requests.get(base + '/export', params=params, verify=False, timeout=120).content))
+    img = img.convert('RGB')
+    draw = ImageDraw.Draw(img)
+
+    def to_px(point):
+        fx, fy = locator_fraction(point[0], point[1], extent)
+        return fx * width, fy * height
+
+    # Large lakes only - the layer also holds thousands of ponds and streams
+    resp = requests.get(base + '/6/query', verify=False, timeout=120,
+                        params={'f': 'json', 'where': f'Shape.STArea() > {min_lake_area}', 'outFields': 'OBJECTID',
+                                'returnGeometry': 'true', 'outSR': 6570, 'maxAllowableOffset': 50})
+    for feature in resp.json().get('features', []):
+        for ring in feature['geometry']['rings']:
+            draw.polygon([to_px(p) for p in ring], fill=(110, 165, 225), outline=(70, 120, 190))
+
+    # City names, placed on the largest piece of each city
+    resp = requests.get(base + '/14/query', verify=False, timeout=120,
+                        params={'f': 'json', 'where': f'SQMILES > {min_city_sq_miles}', 'outFields': 'NAME,SQMILES',
+                                'returnGeometry': 'true', 'outSR': 6570, 'maxAllowableOffset': 100})
+    try:
+        font = ImageFont.truetype('arial.ttf', 15)
+    except OSError:
+        font = ImageFont.load_default()
+    for feature in resp.json().get('features', []):
+        xs, ys = zip(*[p for ring in feature['geometry']['rings'] for p in ring])
+        cx, cy = to_px(((min(xs) + max(xs)) / 2, (min(ys) + max(ys)) / 2))
+        name = feature['attributes']['NAME'].title()
+        left, top, right, bottom = draw.textbbox((0, 0), name, font=font)
+        draw.text((cx - (right - left) / 2, cy - (bottom - top) / 2), name, fill=(40, 40, 40), font=font,
+                  stroke_width=2, stroke_fill=(255, 255, 255))
+
+    os.makedirs(folder, exist_ok=True)
+    img.save(png_path)
+    with open(json_path, 'w') as f:
+        json.dump(extent, f)
+    return png_path, extent
+
+
 if __name__ == '__main__':
+    # This section is used for testing algorithms
+    # Need to comment out the util import lines at the top of the file to run
+    
     import os
     import io
     import sys
@@ -511,47 +600,23 @@ if __name__ == '__main__':
     sys.path.append(os.path.join(os.path.dirname(__file__), '..'))  # Up one directory, so Utils is found
     from tax_util import *
     from google_util import *
-    from urllib.request import urlopen
-    from PIL import Image, ImageDraw
 
     county = "greenville"
-    margin = 0.5
-    size = 1000
-    line_width = 3
     taxmap = "0376000105000"
-    parcel_url = ('https://www.gcgis.org/arcgis3/rest/services/GreenvilleNJ/Tax_Parcel_Search_and_Select/'
-                  'MapServer/0/query')
-    params = {'f': 'json', 'where': "PIN = '" + taxmap + "'", 'outFields': 'PIN', 'outSR': 6570,
-              'returnGeometry': 'true'}
-    features = requests.get(parcel_url, params=params, timeout=60).json().get('features', [])
-    corners = pd.DataFrame(data=features[0]['geometry']['rings'][0], columns=['x', 'y'])
+    margin = 0.5  # Default margin is 0.5
+    size = 800      # Default size is 800
+    line_width = 3  # Default line width is 3
 
-    # Save this to skip the above block if needed
-    # corners_str = '1647645.6669947505 1069640.1066273004;1647649.0679133832 1069637.730314955;1647649.3999343812 1069637.4983595759;1647710.7201443613 1069594.6443569511;1647807.5049212575 1069527.0068897605;1647651.4970472455 1069369.8487532735;1647788.8038057685 1069241.7545931786;1647948.9540682435 1069404.0715223104;1648568.8057742715 1068968.5666010529;1648524.222769022 1068912.1286089271;1648374.144685045 1068738.3415354341;1648223.3267716467 1068575.9475065619;1648125.4957349151 1068478.3959973752;1648031.6617454141 1068388.2585301846;1647469.333989501 1067869.7086614221;1647012.2575459331 1068135.039041996;1647013.2588582635 1068143.1479658782;1647050.664041996 1068446.0672572106;1647157.3930446208 1068830.019685045;1647226.9612860829 1069080.2801837325;1647129.7995406836 1069271.1827427894;1647237.1138451397 1069349.0318241417;1647312.140748039 1069405.0531496108;1647321.152230978 1069411.7818241417;1647610.8333333284 1069628.0836614221;1647612.2257217914 1069629.1233595759;1647646.2260498703 1069654.5108267665;1647645.8543307036 1069644.933727041;1647645.6669947505 1069640.1066273004'
-    # corners = text_to_corners(corners_str)
+    # Comment this line out to use taxmap instead of corners_str; 
+    corners_str = '1647645.6669947505 1069640.1066273004;1647649.0679133832 1069637.730314955;1647649.3999343812 1069637.4983595759;1647710.7201443613 1069594.6443569511;1647807.5049212575 1069527.0068897605;1647651.4970472455 1069369.8487532735;1647788.8038057685 1069241.7545931786;1647948.9540682435 1069404.0715223104;1648568.8057742715 1068968.5666010529;1648524.222769022 1068912.1286089271;1648374.144685045 1068738.3415354341;1648223.3267716467 1068575.9475065619;1648125.4957349151 1068478.3959973752;1648031.6617454141 1068388.2585301846;1647469.333989501 1067869.7086614221;1647012.2575459331 1068135.039041996;1647013.2588582635 1068143.1479658782;1647050.664041996 1068446.0672572106;1647157.3930446208 1068830.019685045;1647226.9612860829 1069080.2801837325;1647129.7995406836 1069271.1827427894;1647237.1138451397 1069349.0318241417;1647312.140748039 1069405.0531496108;1647321.152230978 1069411.7818241417;1647610.8333333284 1069628.0836614221;1647612.2257217914 1069629.1233595759;1647646.2260498703 1069654.5108267665;1647645.8543307036 1069644.933727041;1647645.6669947505 1069640.1066273004'
+    if 'corners_str' not in locals():
+        parcel_url = ('https://www.gcgis.org/arcgis3/rest/services/GreenvilleNJ/Tax_Parcel_Search_and_Select/'
+                    'MapServer/0/query')
+        params = {'f': 'json', 'where': "PIN = '" + taxmap + "'", 'outFields': 'PIN', 'outSR': 6570,
+                'returnGeometry': 'true'}
+        features = requests.get(parcel_url, params=params, timeout=60).json().get('features', [])
+        corners = pd.DataFrame(data=features[0]['geometry']['rings'][0], columns=['x', 'y'])
+        corners_str = corners_to_text(corners)
     
-    bbox = box_maker(corners)
+    get_county_pictures(taxmap, county, corners_str, size=size, margin=margin, line_width=line_width, show=True)
 
-    # Square bbox centered on the parcel, so the image isn't stretched
-    xs = corners['x'].tolist()
-    ys = corners['y'].tolist()
-    half = max(max(xs) - min(xs), max(ys) - min(ys)) * (0.5 + margin)
-    # World Imagery errors (HTTP 500) if zoomed in past ~1 ft per pixel, so keep the image at least size feet wide
-    half = max(half, size / 2)
-    cx, cy = (min(xs) + max(xs)) / 2, (min(ys) + max(ys)) / 2
-    xmin, ymin, xmax, ymax = cx - half, cy - half, cx + half, cy + half
-
-    # Aerial photo (Esri World Imagery)
-    aerial_url = 'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/export'
-    params = {'bbox': f'{xmin},{ymin},{xmax},{ymax}', 'bboxSR': 6570, 'imageSR': 6570,
-            'size': f'{size},{size}', 'format': 'jpg', 'f': 'image'}
-    print(f'Requesting aerial image with params: {params}')
-    resp = requests.get(aerial_url, params=params, timeout=60)
-    print(f'Response status code: {resp.status_code}')
-    img = Image.open(io.BytesIO(resp.content)).convert('RGB')
-    # Convert map coordinates to pixels and draw the red outline
-    draw = ImageDraw.Draw(img)
-    pts = [((x - xmin) / (xmax - xmin) * size, (ymax - y) / (ymax - ymin) * size) for x, y in zip(corners['x'], corners['y'])]
-    draw.line(pts + [pts[0]], fill=(255, 0, 0), width=line_width)
-
-    img.show()
