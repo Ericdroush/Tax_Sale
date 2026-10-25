@@ -13,12 +13,11 @@ from pathlib import Path
 import time
 from datetime import date
 # Need to comment out for testing in the main block
-# from Utils.tax_util import *
-# from Utils.google_util import *
+from Utils.tax_util import *
+from Utils.google_util import *
 
 
 def obtain_props(self, county):
-    import io
 
     self.print_text('Retrieving tax sale properties ...')
     if county == 'greenville':

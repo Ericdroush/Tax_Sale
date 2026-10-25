@@ -20,7 +20,6 @@ from glob import glob
 import os
 import warnings
 import sys
-import importlib
 import datetime
 import ast
 import time
@@ -28,13 +27,13 @@ from Utils.County_Class import CountyClass
 from Utils.google_util import find_distance
 from Utils.tax_util import *
 from Utils.gis_utils.county_driver import *
-from PyQt6 import QtWidgets, QtCore
-from PyQt6.QtCore import Qt, QAbstractTableModel, QUrl, QSortFilterProxyModel, QPointF
+from PyQt6 import QtWidgets
+from PyQt6.QtCore import Qt, QAbstractTableModel, QSortFilterProxyModel, QPointF
 from PyQt6.QtWidgets import QApplication, QMainWindow, QStatusBar, QDialog, QTableView, QVBoxLayout
-from PyQt6.QtWidgets import QComboBox, QLineEdit
-from PyQt6.QtWidgets import QLabel, QWidget, QHBoxLayout, QDialogButtonBox, QStyledItemDelegate, QStyle, QStyleOption
+from PyQt6.QtWidgets import QComboBox, QLineEdit, QGridLayout
+from PyQt6.QtWidgets import QLabel, QHBoxLayout, QDialogButtonBox
 # from PyQt6.QtWebEngineWidgets import QWebEngineView
-from PyQt6.QtGui import QPixmap, QPainter, QPen, QBrush, QColor, QFont
+from PyQt6.QtGui import QPixmap, QPainter, QPen, QBrush
 from qt_ui import Ui_QMainWindow
 
 
@@ -249,27 +248,31 @@ class CustomDialog(QDialog):
         self.h_layout_table = QHBoxLayout()
         self.h_layout_table.addWidget(self.table_view)
 
-        self.h_layout_photos = QHBoxLayout()
+        # Pictures on row 0 with their captions directly below on row 1, so each caption lines up with its picture
+        self.h_layout_photos = QGridLayout()
+        self.h_layout_photos.setHorizontalSpacing(20)
+        self.h_layout_photos.setVerticalSpacing(5)
+        align = Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop
 
         self.image_label = QLabel(self)
         pixmap = QPixmap('Counties/' + county + '/MapView/test.jpg')
         self.image_label.setPixmap(pixmap.scaled(pic_width, pic_height))
-        self.h_layout_photos.addWidget(self.image_label)
+        self.h_layout_photos.addWidget(self.image_label, 0, 0, align)
 
         self.image_label1 = QLabel(self)
         pixmap = QPixmap('Counties/' + county + '/MapWideView/test.jpg')
         self.image_label1.setPixmap(pixmap.scaled(pic_width, pic_height))
-        self.h_layout_photos.addWidget(self.image_label1)
+        self.h_layout_photos.addWidget(self.image_label1, 0, 1, align)
 
         self.image_label2 = QLabel(self)
         pixmap = QPixmap('Counties/' + county + '/StreetView/test.jpg')
         self.image_label2.setPixmap(pixmap.scaled(pic_width, pic_height))
-        self.h_layout_photos.addWidget(self.image_label2)
+        self.h_layout_photos.addWidget(self.image_label2, 0, 2, align)
 
         self.image_label3 = QLabel(self)
         pixmap = QPixmap('Counties/' + county + '/CountyView/test.jpg')
         self.image_label3.setPixmap(pixmap.scaled(pic_width, pic_height))
-        self.h_layout_photos.addWidget(self.image_label3)
+        self.h_layout_photos.addWidget(self.image_label3, 0, 3, align)
 
         # Whole-county locator map: the base map is drawn on the fly with a marker for the selected property
         self.basemap = load_county_basemap(county)
@@ -277,35 +280,32 @@ class CustomDialog(QDialog):
         if self.basemap:
             self.image_label4.setPixmap(self.basemap[0].scaledToHeight(
                 pic_height, Qt.TransformationMode.SmoothTransformation))
-        self.h_layout_photos.addWidget(self.image_label4)
-        self.h_layout_photos.setSpacing(20)
+        self.h_layout_photos.addWidget(self.image_label4, 0, 4, align)
 
-        self.h_layout_captions = QHBoxLayout()
         url_link = '<a href="https://www.google.com/maps/">Google Maps</a>'
         self.label = QLabel(self)
         self.label.setText(url_link)
         self.label.setOpenExternalLinks(True)
-        self.h_layout_captions.addWidget(self.label)
+        self.h_layout_photos.addWidget(self.label, 1, 0, align)
 
         self.label1 = QLabel(self)
         self.label1.setText(url_link)
         self.label1.setOpenExternalLinks(True)
-        self.h_layout_captions.addWidget(self.label1)
+        self.h_layout_photos.addWidget(self.label1, 1, 1, align)
 
         self.label2 = QLabel(self)
         self.label2.setText(url_link)
         self.label2.setOpenExternalLinks(True)
-        self.h_layout_captions.addWidget(self.label2)
+        self.h_layout_photos.addWidget(self.label2, 1, 2, align)
 
         url_link = '<a href="https://www.gcgis.org/apps/GreenvilleNJ/">GCGIS</a>'
         self.label3 = QLabel(self)
         self.label3.setText(url_link)
         self.label3.setOpenExternalLinks(True)
-        self.h_layout_captions.addWidget(self.label3)
+        self.h_layout_photos.addWidget(self.label3, 1, 3, align)
 
         self.label4 = QLabel('Location in county', self)
-        self.h_layout_captions.addWidget(self.label4)
-        self.h_layout_captions.setSpacing(20)
+        self.h_layout_photos.addWidget(self.label4, 1, 4, align)
 
         q_btn = (QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Close)
 
@@ -317,7 +317,6 @@ class CustomDialog(QDialog):
         self.v_layout.addLayout(self.h_layout_filter)
         self.v_layout.addLayout(self.h_layout_table)
         self.v_layout.addLayout(self.h_layout_photos)
-        self.v_layout.addLayout(self.h_layout_captions)
         self.v_layout.addWidget(self.buttonBox)
         self.v_layout.setContentsMargins(5, 5, 5, 5)
         self.v_layout.setSpacing(20)
@@ -371,7 +370,7 @@ class CustomDialog(QDialog):
 
         # Five images across: the county map is tall and narrow, so it gets less width than the others
         aspect = self.basemap[0].width() / self.basemap[0].height() if self.basemap else 0
-        pic_width = int((self.width() - 20 - 4 * self.h_layout_photos.spacing()) / (4 + 2 / 3 * aspect))
+        pic_width = int((self.width() - 20 - 4 * self.h_layout_photos.horizontalSpacing()) / (4 + 2 / 3 * aspect))
         pic_height = int(pic_width * 2/3)
         self.update_locator(corners, pic_height)
 
@@ -653,6 +652,10 @@ class MainWindow(QMainWindow, Ui_QMainWindow):
         self.print_text('Downloading Pictures...')
         current_county = self.combo_county.currentText().lower()
         props = self.read_props()
+
+        # Picture folders may have been archived/removed, so make sure they exist before saving into them
+        for folder in ['CountyView', 'MapView', 'MapWideView', 'StreetView']:
+            os.makedirs('Counties/' + current_county.title() + '/' + folder, exist_ok=True)
 
         t0 = time.perf_counter()
         dt = []
