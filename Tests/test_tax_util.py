@@ -11,6 +11,17 @@ def test_get_type():
     assert len(get_type()) == len(get_cols())
 
 
+def test_get_cols_match_type_order():
+    # populate_fields builds its row positionally from get_cols(), so the order must agree
+    assert get_cols() == list(get_type().keys())
+
+
+def test_prev_owner_column():
+    assert get_cols().index('prev_owner') == get_cols().index('owner') + 1
+    assert get_type()['prev_owner'] is str
+    assert get_defaults()['prev_owner'] == 'NaN'
+
+
 def test_geo_convert():
     lat = 1510430.8127932462
     lon = 981911.2924082115
@@ -33,18 +44,18 @@ def test_from_excel_serial():
 
 
 def test_polygon_area_square():
-    points = pd.DataFrame(data=[(0, 0), (0, 1), (1, 1), (1, 0)], columns=['x', 'y'])
-    assert polygon_area(points) == 1 / 43560
+    points = pd.DataFrame(data=[(0, 0), (0, 100), (100, 100), (100, 0)], columns=['x', 'y'])
+    assert polygon_area(points) == 10000 / 43560
 
 
 def test_polygon_area_tri():
-    points = pd.DataFrame(data=[(0, 0), (0, 1), (1, 0.5)], columns=['x', 'y'])
-    assert polygon_area(points) == 1 / 2 / 43560
+    points = pd.DataFrame(data=[(0, 0), (0, 100), (100, 0)], columns=['x', 'y'])
+    assert polygon_area(points) == 10000 / 2 / 43560
 
 
 def test_polygon_area_rect():
-    points = pd.DataFrame(data=[(0, 0), (0, 2), (1, 2), (1, 0)], columns=['x', 'y'])
-    assert polygon_area(points) == 2 / 43560
+    points = pd.DataFrame(data=[(0, 0), (0, 200), (100, 200), (100, 0)], columns=['x', 'y'])
+    assert polygon_area(points) == 20000 / 43560
 
 
 def test_box_maker():

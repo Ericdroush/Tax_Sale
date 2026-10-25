@@ -143,18 +143,22 @@ def populate_fields(county, tm, prop, props, output):
             bldgs = 0
         else:
             bldgs = 1
-        # 110 Multi-Family Duplex
-        # 940 Storage / Warehouse – General
-        # 1100 Residential Single Family
-        # 1101 Residential Single Family with Auxiliary Use
-        # 1170 Residential Mobile Home with Land
-        # 1171 Residential Mobile Home on Mobile Home File
-        # 1180 Residential Vacant
-        # 1181 Homeowners Association Property
-        # 1182 Common Area
-        # 6800 Commercial Vacant
-        # 9170 Agricultural Vacant
-        # 9171 Agricultural Improved
+        # 110: Multi-Family Duplex
+        # 112: Multi-Family Multiplex
+        # 330: Auto - Service Garage / Body Shop
+        # 421: Office – General
+        # 890: Broadcasting Facility
+        # 940: Storage / Warehouse – General
+        # 1100: Residential Single Family
+        # 1101: Residential Single Family with Auxiliary Use
+        # 1170: Residential Mobile Home with Land
+        # 1171: Residential Mobile Home on Mobile Home File
+        # 1180: Residential Vacant
+        # 1181: Homeowners Association Property
+        # 1182: Common Area
+        # 6800: Commercial Vacant
+        # 9170: Agricultural Vacant
+        # 9171: Agricultural Improved
         # bldg_type = attr['PROPTYPE']  # Discontinued in 2024
         bedrooms = attr['BEDROOMS']
         sq_ft = attr['SQFEET']
@@ -169,7 +173,8 @@ def populate_fields(county, tm, prop, props, output):
         appraised_land = 'NaN'
         appraised_bldg = 'NaN'
         bldg_ratio = 'NaN'
-        # Other attributes that might be useful:  IMPROVED, PROPTYPE, POWNNM
+        # Other attributes that might be useful:  IMPROVED, PROPTYPE
+        prev_owner = (attr['POWNNM'] or '').strip() or 'NaN'
 
         # Calculated parameters
         dpsf = dpsf_calc(appraised_total, sq_ft)
@@ -183,6 +188,7 @@ def populate_fields(county, tm, prop, props, output):
 
     elif county == 'anderson':
         account = 'NaN'
+        prev_owner = 'NaN'  # Not available from the Anderson sources
         subdiv = 'NaN'
         tax_dist = props['tax_dist'].iloc[prop]
         acres = attr['SHAPE.STArea()'] / 43560
@@ -267,7 +273,7 @@ def populate_fields(county, tm, prop, props, output):
     # Ths logic is that I won't be too bummed about only earning 6% but would be more bummed by not being able to bid
     max_bid = round(amount_due / 0.06, 0)  # This could have been set to amount_due / 0.12 to be more conservative
     est_bid = round(max(appraised_total, sale_price) * 0.80, 0)  # Based on past experience the bid is likely to go
-    data_list = [props['item'].iloc[prop], tm, account, props['owner'].iloc[prop], address, subdiv, tax_dist,
+    data_list = [props['item'].iloc[prop], tm, account, props['owner'].iloc[prop], prev_owner, address, subdiv, tax_dist,
                  bldgs, acres, landuse, bldg_type, bedrooms, sq_ft, dpsf, yr_built, appraised_land, appraised_bldg,
                  appraised_total, bldg_ratio, sale_price, sale_date, lake, bbox, corners_str, lat, lon, dist1, dist2, dist3,
                  withdrawn, county_link, map_link, amount_due, '', '', '', est_bid, max_bid]
