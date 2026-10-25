@@ -34,7 +34,7 @@ def test_get_gis_info_greenville():
     print(json.dumps(output, indent=2))
     attr = output['features'][0]['attributes']
     cols = ['SUBDIV', 'DIST', 'TACRES', 'LANDUSE', 'BEDROOMS', 'SQFEET', 'FAIRMKTVAL', 'SLPRICE',
-            'DEEDDATE']
+            'DEEDDATE', 'POWNNM']
     # Check if all required columns are found
     col_test = all(col in attr.keys() for col in cols)
     corner_test = len(output['features'][0]['geometry']['rings'][0]) > 0

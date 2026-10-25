@@ -58,7 +58,7 @@ class PandasModel(QAbstractTableModel):
         if index.isValid():
             if role == Qt.ItemDataRole.DisplayRole:
                 value = self._data.iloc[index.row(), index.column()]
-                if index.column() == 8:  # Acres
+                if self._data.columns[index.column()] == 'acres':
                     value = "%.2f" % value
                 else:
                     value = str(value)
@@ -164,8 +164,9 @@ class CustomDialog(QDialog):
                                       "QTableView::item:selected{background:rgb(12, 128, 220)}")
 
         col_index = {name: i for i, name in enumerate(props.columns)}
+        self.col_index = col_index
 
-        hidden_cols = ['account', 'tax_dist', 'bldgs', 'bldg_type', 'bbox', 'corners', 'lat', 'long',
+        hidden_cols = ['account', 'prev_owner', 'tax_dist', 'bldgs', 'bldg_type', 'bbox', 'corners', 'lat', 'long',
                        'withdrawn', 'county_link', 'map_link']  # Base hidden columns
         hidden_cols.extend(['yr_built', 'appraised_land', 'appraised_bldg', 'bldg_ratio'])
 
@@ -322,8 +323,8 @@ class CustomDialog(QDialog):
         indexes = self.table_view.selectedIndexes()
         if indexes:
             index = indexes[0]
-            tax_map = index.siblingAtColumn(1).data()
-            address = index.siblingAtColumn(4).data()
+            tax_map = index.siblingAtColumn(self.col_index['taxmap']).data()
+            address = index.siblingAtColumn(self.col_index['address']).data()
         else:
             return
 

@@ -12,7 +12,7 @@ def get_counties():
 
 
 def get_cols():
-    return ['item', 'taxmap', 'account', 'owner', 'address', 'subdiv', 'tax_dist', 'bldgs', 'acres', 'land_use',
+    return ['item', 'taxmap', 'account', 'owner', 'prev_owner', 'address', 'subdiv', 'tax_dist', 'bldgs', 'acres', 'land_use',
             'bldg_type', 'bedrooms', 'sq_ft', 'dpsf', 'yr_built', 'appraised_land', 'appraised_bldg', 'appraised_total',
             'bldg_ratio', 'sale_price', 'sale_date', 'lake%', 'bbox', 'corners', 'lat', 'long', 'dist1', 'dist2', 'dist3',
             'withdrawn', 'county_link', 'map_link', 'amount_due', 'comments', 'rating', 'bid', 'est_bid', 'max_bid']
@@ -24,6 +24,7 @@ def get_type():
         'taxmap': str,
         'account': str,
         'owner': str,
+        'prev_owner': str,
         'address': str,
         'subdiv': str,
         'tax_dist': str,

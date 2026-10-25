@@ -27,6 +27,7 @@ def filter_props(df, training=True):
     landuse in [130, 1171]                            |   0   | MH               |  9.6%
     landuse in [1181, 205]                            |   0   | HOA              |  1.6%
     landuse in [805]                                  |   0   | Cemetery!!!      |  0.0%
+    prev_owner is FLC / Forfeited Land Commission     |   0   | FLC              |  n/a
     landuse in [1100, 1101, 9171] and est_bid < 30000 |   0   | Low price house  |  0.6%
     _______________________________________________________________________________________________
                                                                                  | 43.8%
@@ -38,8 +39,6 @@ def filter_props(df, training=True):
     _______________________________________________________________________________________________
                                                                                  | 55.6%
     Other filters to put in place...
-    -If previous owner is FLC or forfeited land commission - avoid these
-        -I don't currently track previous owner but could add it
     -Look for 'HOA' in owners name
 
     """
@@ -81,6 +80,11 @@ def filter_props(df, training=True):
     mark_screened(df, df['land_use'].isin([805]), 'Cemetery')
     filterted_props_old = print_prop_summary(len(df.loc[df['training_filter']]), filterted_props_old, total_props,
                                               'Creepy Cemeteries')
+
+    # Filter out properties previously owned by the Forfeited Land Commission
+    mark_screened(df, df['prev_owner'].str.contains(r'\bFLC\b|FORFEITED\s+LAND', na=False, case=False), 'FLC')
+    filterted_props_old = print_prop_summary(len(df.loc[df['training_filter']]), filterted_props_old, total_props,
+                                              'Forfeited Land Commission')
 
     # Filter out very low estimated bid houses
     mark_screened(df, (df['land_use'].isin([1100, 1101, 9171])) & (df['est_bid'] < 30000), 'Low price house')
