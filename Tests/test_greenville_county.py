@@ -54,6 +54,34 @@ def test_get_gis_info_greenville():
     assert test
 
 
+def test_county_boundary_layer_greenville():
+    # The locator map relies on the County Boundary layer (id 16) and Lake or River layer (id 6)
+    base = 'https://www.gcgis.org/arcgis3/rest/services/GCGIA/Greenville_Base/MapServer'
+    for layer, name in [(16, 'County Boundary'), (14, 'Municipal Boundary'), (6, 'Lake or River'),
+                        (1, 'Federal Highway')]:
+        info = requests.get(base + '/' + str(layer), params={'f': 'json'}, verify=False, timeout=60).json()
+        assert info['name'] == name
+    response = requests.get(base + '/16/query', verify=False, timeout=60,
+                            params={'f': 'json', 'where': '1=1', 'returnExtentOnly': 'true', 'outSR': 6570})
+    extent = response.json()['extent']
+    assert extent['xmax'] > extent['xmin'] and extent['ymax'] > extent['ymin']
+
+
+def test_locator_fraction():
+    from Utils.gis_utils.county_driver import locator_fraction
+    extent = {'xmin': 1000, 'ymin': 2000, 'xmax': 2000, 'ymax': 4000}
+    assert locator_fraction(1000, 4000, extent) == (0, 0)  # Top-left
+    assert locator_fraction(2000, 2000, extent) == (1, 1)  # Bottom-right
+    assert locator_fraction(1500, 3000, extent) == (0.5, 0.5)
+    fx, fy = locator_fraction(500, 5000, extent)  # Outside the map
+    assert fx < 0 and fy < 0
+
+
+def test_corners_center():
+    from Utils.gis_utils.county_driver import corners_center
+    assert corners_center('0 0;0 10;20 10;20 0') == (10, 5)
+
+
 def test_find_lake_props_greenville():
     # Original Test bbox
     bbox = '1646762.2575459331%2C1067619.7086614221%2C1648818.8061023653%2C1069904.5104986876'
