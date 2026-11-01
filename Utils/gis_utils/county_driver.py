@@ -5,6 +5,7 @@ This is the has overall logic for looking up country information - it calls coun
 @author: ericd
 """
 import io
+import json
 import os
 
 from bs4 import BeautifulSoup
@@ -108,6 +109,61 @@ def get_props(county, tm):
     return json.loads(response.text)
 
 
+def rings_to_geometry(rings):
+    # ArcGIS rings -> shapely geometry. Clockwise rings are outer boundaries, counter-clockwise rings are holes
+    from shapely.geometry import Polygon, LinearRing
+    from shapely.ops import unary_union
+
+    outer, holes = [], []
+    for ring in rings:
+        if len(ring) < 4:
+            continue
+        (holes if LinearRing(ring).is_ccw else outer).append(Polygon(ring).buffer(0))
+    geom = unary_union(outer)
+    if holes:
+        geom = geom.difference(unary_union(holes))
+    return geom
+
+
+def get_flood_info(county, rings, wkid):
+    """
+    Returns the percent of the parcel (0-100) that lies in the FEMA Special Flood Hazard Area (the 1% annual chance
+    floodplain, zones A/AE/floodway), or 'NaN' if it can't be determined.
+    rings and wkid come from the parcel geometry returned by get_props()
+    """
+    if county != 'greenville':
+        return 'NaN'
+
+    # Layer 8 is the FIRM Flood Zone layer, SFHA_TF = 'T' is the high risk floodplain (excludes the 0.2% zone X)
+    url = 'https://www.gcgis.org/arcgis3/rest/services/GreenvilleNJ/FEMA/MapServer/8/query'
+    data = {'f': 'json',
+            'geometry': json.dumps({'rings': rings, 'spatialReference': {'wkid': wkid}}),
+            'geometryType': 'esriGeometryPolygon',
+            'inSR': wkid,
+            'outSR': wkid,
+            'spatialRel': 'esriSpatialRelIntersects',
+            'where': "SFHA_TF = 'T'",
+            'outFields': 'FLD_ZONE',
+            'returnGeometry': 'true',
+            'maxAllowableOffset': 4}  # Generalize the flood polygons, in feet
+    try:
+        result = requests.post(url, data=data, timeout=60).json()
+        if 'error' in result:
+            return 'NaN'
+
+        parcel = rings_to_geometry(rings)
+        if parcel.is_empty or parcel.area == 0:
+            return 'NaN'
+        flood_rings = [ring for feature in result['features'] for ring in feature['geometry']['rings']]
+        if not flood_rings:
+            return 0.0
+
+        flood_pct = parcel.intersection(rings_to_geometry(flood_rings)).area / parcel.area * 100
+        return round(min(flood_pct, 100), 1)
+    except (requests.RequestException, ValueError, KeyError):
+        return 'NaN'
+
+
 def populate_fields(county, tm, prop, props, output):
     # print(output)
     attr = output['features'][0]['attributes']
@@ -130,6 +186,7 @@ def populate_fields(county, tm, prop, props, output):
 
     withdrawn = 'A'
     lake, dist1, dist2, dist3 = 'NaN', 'NaN', 'NaN', 'NaN'
+    flood = get_flood_info(county, output['features'][0]['geometry']['rings'], wkid)
 
     if county == 'greenville':
         account = 'NaN'
@@ -274,7 +331,7 @@ def populate_fields(county, tm, prop, props, output):
     est_bid = round(max(appraised_total, sale_price) * 0.80, 0)  # Based on past experience the bid is likely to go
     data_list = [props['item'].iloc[prop], tm, account, props['owner'].iloc[prop], prev_owner, address, subdiv, tax_dist,
                  bldgs, acres, landuse, bldg_type, bedrooms, sq_ft, dpsf, yr_built, appraised_land, appraised_bldg,
-                 appraised_total, bldg_ratio, sale_price, sale_date, lake, bbox, corners_str, lat, lon, dist1, dist2, dist3,
+                 appraised_total, bldg_ratio, sale_price, sale_date, lake, flood, bbox, corners_str, lat, lon, dist1, dist2, dist3,
                  withdrawn, county_link, map_link, amount_due, '', '', '', est_bid, max_bid]
 
     return data_list
@@ -467,38 +524,41 @@ def county_pic_url(county, bbox):
         return 'County Not Found'
 
 
-def get_county_pictures(taxmap, county, corners, size=800, margin=0.5, line_width=3, show=False):
+def get_county_pictures(taxmap, county, corners, size=800, margin=0.5, line_width=3, show=False, folder='CountyView'):
     # Assumes that corners is in text form and needs converted via text_to_corners()
     from urllib.request import urlopen
     from PIL import Image, ImageDraw
     import io
 
     corners = text_to_corners(corners)
-    if not os.path.isfile('Counties/' + county.title() + '/CountyView/' + taxmap + '.png'):
-        # Square bbox centered on the parcel, so the image isn't stretched
+    if not os.path.isfile('Counties/' + county.title() + '/' + folder + '/' + taxmap + '.png'):
+        # 3:2 image (same as the Google map view) so it isn't stretched on screen. size is the width in pixels
+        height = round(size * 2 / 3)
         xs = corners['x'].tolist()
         ys = corners['y'].tolist()
-        half = max(max(xs) - min(xs), max(ys) - min(ys)) * (0.5 + margin)
+        # Half-width that leaves the margin around the parcel both horizontally and vertically
+        half = max(max(xs) - min(xs), 1.5 * (max(ys) - min(ys))) * (0.5 + margin)
         # World Imagery errors (HTTP 500) if zoomed in past ~1 ft per pixel, so keep the image at least size feet wide
         half = max(half, size / 2)
+        half_y = half * height / size
         cx, cy = (min(xs) + max(xs)) / 2, (min(ys) + max(ys)) / 2
-        xmin, ymin, xmax, ymax = cx - half, cy - half, cx + half, cy + half
+        xmin, ymin, xmax, ymax = cx - half, cy - half_y, cx + half, cy + half_y
 
         # Aerial photo (Esri World Imagery)
         aerial_url = 'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/export'
         params = {'bbox': f'{xmin},{ymin},{xmax},{ymax}', 'bboxSR': 6570, 'imageSR': 6570,
-                'size': f'{size},{size}', 'format': 'jpg', 'f': 'image'}
+                'size': f'{size},{height}', 'format': 'jpg', 'f': 'image'}
         resp = requests.get(aerial_url, params=params, timeout=60)
         img = Image.open(io.BytesIO(resp.content)).convert('RGB')
         # Convert map coordinates to pixels and draw the red outline
         draw = ImageDraw.Draw(img)
-        pts = [((x - xmin) / (xmax - xmin) * size, (ymax - y) / (ymax - ymin) * size) for x, y in zip(corners['x'], corners['y'])]
+        pts = [((x - xmin) / (xmax - xmin) * size, (ymax - y) / (ymax - ymin) * height) for x, y in zip(corners['x'], corners['y'])]
         draw.line(pts + [pts[0]], fill=(255, 0, 0), width=line_width)
 
         if show:
             img.show()
         else:
-            img.save('Counties/' + county.title() + '/CountyView/' + taxmap + '.png')
+            img.save('Counties/' + county.title() + '/' + folder + '/' + taxmap + '.png')
 
     return
 
@@ -600,14 +660,15 @@ if __name__ == '__main__':
     from tax_util import *
     from google_util import *
 
-    county = "greenville"
-    taxmap = "0376000105000"
+    county = "test"
+    taxmap = "0634020103901"
     margin = 0.5  # Default margin is 0.5
     size = 800      # Default size is 800
     line_width = 3  # Default line width is 3
 
     # Comment this line out to use taxmap instead of corners_str; 
-    corners_str = '1647645.6669947505 1069640.1066273004;1647649.0679133832 1069637.730314955;1647649.3999343812 1069637.4983595759;1647710.7201443613 1069594.6443569511;1647807.5049212575 1069527.0068897605;1647651.4970472455 1069369.8487532735;1647788.8038057685 1069241.7545931786;1647948.9540682435 1069404.0715223104;1648568.8057742715 1068968.5666010529;1648524.222769022 1068912.1286089271;1648374.144685045 1068738.3415354341;1648223.3267716467 1068575.9475065619;1648125.4957349151 1068478.3959973752;1648031.6617454141 1068388.2585301846;1647469.333989501 1067869.7086614221;1647012.2575459331 1068135.039041996;1647013.2588582635 1068143.1479658782;1647050.664041996 1068446.0672572106;1647157.3930446208 1068830.019685045;1647226.9612860829 1069080.2801837325;1647129.7995406836 1069271.1827427894;1647237.1138451397 1069349.0318241417;1647312.140748039 1069405.0531496108;1647321.152230978 1069411.7818241417;1647610.8333333284 1069628.0836614221;1647612.2257217914 1069629.1233595759;1647646.2260498703 1069654.5108267665;1647645.8543307036 1069644.933727041;1647645.6669947505 1069640.1066273004'
+    # corners_str = '1647645.6669947505 1069640.1066273004;1647649.0679133832 1069637.730314955;1647649.3999343812 1069637.4983595759;1647710.7201443613 1069594.6443569511;1647807.5049212575 1069527.0068897605;1647651.4970472455 1069369.8487532735;1647788.8038057685 1069241.7545931786;1647948.9540682435 1069404.0715223104;1648568.8057742715 1068968.5666010529;1648524.222769022 1068912.1286089271;1648374.144685045 1068738.3415354341;1648223.3267716467 1068575.9475065619;1648125.4957349151 1068478.3959973752;1648031.6617454141 1068388.2585301846;1647469.333989501 1067869.7086614221;1647012.2575459331 1068135.039041996;1647013.2588582635 1068143.1479658782;1647050.664041996 1068446.0672572106;1647157.3930446208 1068830.019685045;1647226.9612860829 1069080.2801837325;1647129.7995406836 1069271.1827427894;1647237.1138451397 1069349.0318241417;1647312.140748039 1069405.0531496108;1647321.152230978 1069411.7818241417;1647610.8333333284 1069628.0836614221;1647612.2257217914 1069629.1233595759;1647646.2260498703 1069654.5108267665;1647645.8543307036 1069644.933727041;1647645.6669947505 1069640.1066273004'
+    corners_str = '1576628.8589238822 1107884.3677821457;1576551.1709317565 1107817.2785433084;1576474.5259186327 1107751.0908792615;1576441.2017716467 1107791.6125328094;1576417.8451443613 1107819.1476377994;1576335.6430446208 1107916.0515091866;1576402.2457349151 1107971.0387139171;1576412.2979002595 1107979.7365485579;1576490.2299868762 1108047.1709317565;1576571.283136487 1107951.9835958034;1576628.8589238822 1107884.3677821457'
     if 'corners_str' not in locals():
         parcel_url = ('https://www.gcgis.org/arcgis3/rest/services/GreenvilleNJ/Tax_Parcel_Search_and_Select/'
                     'MapServer/0/query')
@@ -616,6 +677,7 @@ if __name__ == '__main__':
         features = requests.get(parcel_url, params=params, timeout=60).json().get('features', [])
         corners = pd.DataFrame(data=features[0]['geometry']['rings'][0], columns=['x', 'y'])
         corners_str = corners_to_text(corners)
-    
+        print(corners_str)
+
     get_county_pictures(taxmap, county, corners_str, size=size, margin=margin, line_width=line_width, show=True)
 

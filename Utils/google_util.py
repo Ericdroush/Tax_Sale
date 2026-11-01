@@ -112,8 +112,8 @@ def get_mapview(taxmap, county, loc):
     from PIL import Image
     import io
 
-    zooms = [19, 17]
-    dirs = ['MapView', 'MapWideView']
+    zooms = [19]
+    dirs = ['MapView']
 
     for i in range(len(zooms)):
         if not os.path.isfile('Counties/' + county + '/' + dirs[i] + '/' + taxmap + '.jpg'):

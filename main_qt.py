@@ -255,22 +255,22 @@ class CustomDialog(QDialog):
         align = Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop
 
         self.image_label = QLabel(self)
-        pixmap = QPixmap('Counties/' + county + '/MapView/test.jpg')
+        pixmap = QPixmap('Counties/' + county + '/StreetView/test.jpg')
         self.image_label.setPixmap(pixmap.scaled(pic_width, pic_height))
         self.h_layout_photos.addWidget(self.image_label, 0, 0, align)
 
         self.image_label1 = QLabel(self)
-        pixmap = QPixmap('Counties/' + county + '/MapWideView/test.jpg')
+        pixmap = QPixmap('Counties/' + county + '/MapView/test.jpg')
         self.image_label1.setPixmap(pixmap.scaled(pic_width, pic_height))
         self.h_layout_photos.addWidget(self.image_label1, 0, 1, align)
 
         self.image_label2 = QLabel(self)
-        pixmap = QPixmap('Counties/' + county + '/StreetView/test.jpg')
+        pixmap = QPixmap('Counties/' + county + '/CountyView/test.jpg')
         self.image_label2.setPixmap(pixmap.scaled(pic_width, pic_height))
         self.h_layout_photos.addWidget(self.image_label2, 0, 2, align)
 
         self.image_label3 = QLabel(self)
-        pixmap = QPixmap('Counties/' + county + '/CountyView/test.jpg')
+        pixmap = QPixmap('Counties/' + county + '/CountyWideView/test.jpg')
         self.image_label3.setPixmap(pixmap.scaled(pic_width, pic_height))
         self.h_layout_photos.addWidget(self.image_label3, 0, 3, align)
 
@@ -293,12 +293,12 @@ class CustomDialog(QDialog):
         self.label1.setOpenExternalLinks(True)
         self.h_layout_photos.addWidget(self.label1, 1, 1, align)
 
+        url_link = '<a href="https://www.gcgis.org/apps/GreenvilleNJ/">GCGIS</a>'
         self.label2 = QLabel(self)
         self.label2.setText(url_link)
         self.label2.setOpenExternalLinks(True)
         self.h_layout_photos.addWidget(self.label2, 1, 2, align)
 
-        url_link = '<a href="https://www.gcgis.org/apps/GreenvilleNJ/">GCGIS</a>'
         self.label3 = QLabel(self)
         self.label3.setText(url_link)
         self.label3.setOpenExternalLinks(True)
@@ -377,11 +377,7 @@ class CustomDialog(QDialog):
         self.pen = QPen(Qt.GlobalColor.red)
         self.pen.setWidth(5)
 
-        pixmap = QPixmap('Counties/' + county + '/MapView/' + str(tax_map) + '.jpg')
-        self.painter_instance = QPainter(pixmap)
-        self.painter_instance.setPen(self.pen)
-        self.painter_instance.drawEllipse(300, 200, 10, 10)
-        self.painter_instance.end()
+        pixmap = QPixmap('Counties/' + county + '/StreetView/' + str(tax_map) + '.jpg')
         self.image_label.setPixmap(pixmap.scaled(pic_width, pic_height))
         link_address = ('https://www.google.com/maps/place/' +
                         address.split()[0].replace('+', '%2B') + ',+' +
@@ -390,25 +386,21 @@ class CustomDialog(QDialog):
         url_link = '<a href="' + link_address + '">Google Maps</a>'
         self.label.setText(url_link)
 
-        pixmap = QPixmap('Counties/' + county + '/MapWideView/' + str(tax_map) + '.jpg')
+        pixmap = QPixmap('Counties/' + county + '/MapView/' + str(tax_map) + '.jpg')
         self.painter_instance = QPainter(pixmap)
         self.painter_instance.setPen(self.pen)
-        self.painter_instance.drawEllipse(300, 200, 10, 10)
+        self.painter_instance.drawEllipse(QPointF(pixmap.width() / 2, pixmap.height() / 2), 5, 5)
         self.painter_instance.end()
         self.image_label1.setPixmap(pixmap.scaled(pic_width, pic_height))
         self.label1.setText(url_link)
 
-        pixmap = QPixmap('Counties/' + county + '/StreetView/' + str(tax_map) + '.jpg')
+        pixmap = QPixmap('Counties/' + county + '/CountyView/' + str(tax_map) + '.png')
         self.image_label2.setPixmap(pixmap.scaled(pic_width, pic_height))
+        url_link = '<a href="https://www.gcgis.org/apps/GreenvilleNJ/?PIN=' + tax_map + '">GCGIS</a>'
         self.label2.setText(url_link)
 
-        pixmap = QPixmap('Counties/' + county + '/CountyView/' + str(tax_map) + '.png')
-        self.painter_instance = QPainter(pixmap)
-        self.painter_instance.setPen(self.pen)
-        self.painter_instance.drawEllipse(300, 200, 10, 10)
-        self.painter_instance.end()
+        pixmap = QPixmap('Counties/' + county + '/CountyWideView/' + str(tax_map) + '.png')
         self.image_label3.setPixmap(pixmap.scaled(pic_width, pic_height))
-        url_link = '<a href="https://www.gcgis.org/apps/GreenvilleNJ/?PIN=' + tax_map + '">GCGIS</a>'
         self.label3.setText(url_link)
 
         return
@@ -654,7 +646,7 @@ class MainWindow(QMainWindow, Ui_QMainWindow):
         props = self.read_props()
 
         # Picture folders may have been archived/removed, so make sure they exist before saving into them
-        for folder in ['CountyView', 'MapView', 'MapWideView', 'StreetView']:
+        for folder in ['StreetView', 'MapView', 'CountyView', 'CountyWideView']:
             os.makedirs('Counties/' + current_county.title() + '/' + folder, exist_ok=True)
 
         t0 = time.perf_counter()
@@ -678,6 +670,7 @@ class MainWindow(QMainWindow, Ui_QMainWindow):
 
             if isinstance(bbox, str):  # NaN will be a float, expecting a string
                 get_county_pictures(taxmap, current_county, corners)
+                get_county_pictures(taxmap, current_county, corners, margin=3.0, folder='CountyWideView')
 
             get_mapview(taxmap, current_county, loc)
             get_streetview(taxmap, current_county, loc)

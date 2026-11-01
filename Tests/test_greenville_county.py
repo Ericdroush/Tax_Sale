@@ -82,6 +82,28 @@ def test_corners_center():
     assert corners_center('0 0;0 10;20 10;20 0') == (10, 5)
 
 
+def test_rings_to_geometry_hole():
+    from Utils.gis_utils.county_driver import rings_to_geometry
+    outer = [[0, 0], [0, 10], [10, 10], [10, 0], [0, 0]]  # Clockwise = outer ring
+    hole = [[2, 2], [8, 2], [8, 8], [2, 8], [2, 2]]  # Counter-clockwise = hole
+    assert rings_to_geometry([outer]).area == 100
+    assert rings_to_geometry([outer, hole]).area == 64
+
+
+def test_get_flood_info_other_county():
+    from Utils.gis_utils.county_driver import get_flood_info
+    assert get_flood_info('anderson', [], 102733) == 'NaN'
+
+
+def test_get_flood_info_greenville():
+    from Utils.gis_utils.county_driver import get_props, get_flood_info
+    # Fully in the 1% floodplain, and not in a flood zone
+    for tm, expected in [('0239010903200', 100.0), ('0508010101701', 0.0)]:
+        output = get_props('greenville', tm)
+        rings = output['features'][0]['geometry']['rings']
+        assert get_flood_info('greenville', rings, output['spatialReference']['latestWkid']) == expected
+
+
 def test_find_lake_props_greenville():
     # Original Test bbox
     bbox = '1646762.2575459331%2C1067619.7086614221%2C1648818.8061023653%2C1069904.5104986876'
